@@ -2,7 +2,7 @@ name: Daily Birchdale Weather Report
 
 on:
   schedule:
-    - cron: '0 13 * * *'   # 6 AM Pacific Time
+    - cron: '0 13 * * *'   # 6 AM Pacific
   workflow_dispatch:
 
 jobs:
@@ -30,7 +30,7 @@ jobs:
           TWILIO_TOKEN: ${{ secrets.TWILIO_TOKEN }}
           TWILIO_PHONE: ${{ secrets.TWILIO_PHONE }}
           OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
-        run: |
+        run: >-
           cat > keys.py << 'EOF'
           EMAIL_FROM = "$EMAIL_FROM"
           EMAIL_PASSWORD = "$EMAIL_PASSWORD"
