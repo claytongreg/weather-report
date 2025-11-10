@@ -298,7 +298,7 @@ email_html += """</div>
 print("Sending email...")
 msg = MIMEMultipart('alternative')
 msg['From'] = EMAIL_FROM
-msg['To'] = ', '.join([e.strip() for e in EMAIL_TO.split(',')])
+msg['To'] = ', '.join([e.strip() for e in EMAIL_TO])
 msg['Subject'] = f"Birchdale Weather • {current_time.strftime('%B %d, %Y')}"
 
 msg.attach(MIMEText(email_html, 'html'))
