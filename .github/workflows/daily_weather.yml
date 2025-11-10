@@ -29,5 +29,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests twilio pytz
 
-      - name: Run weather script
+      - name: Run weather script and generate index.html
         run: python main.py
+
+      - name: Commit and push index.html
+        run: |
+          git config --global user.name "Weather Bot"
+          git config --global user.email "weather@bot.com"
+          git add index.html
+          git commit -m "Update weather report [skip ci]" || echo "No changes"
+          git push origin main
