@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {font-family: 'Segoe UI', sans-serif; line-height: 1.6; color: #333; max-width: 900px; margin: 0 auto; background: #f5f5f5; padding: 15px;}
+        .container {background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); overflow: hidden;}
+        .header {background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px 20px; text-align: center;}
+        .header h1 {margin: 0; font-size: 28px; font-weight: 700;}
+        .header p {margin: 8px 0 0; font-size: 14px; opacity: 0.95;}
+        .section {padding: 20px; border-bottom: 1px solid #eee;}
+        .section:last-child {border-bottom: none;}
+        .section h2 {color: #667eea; font-size: 18px; margin: 0 0 15px; font-weight: 600; border-bottom: 2px solid #667eea; padding-bottom: 6px;}
+
+        /* METRIC CARDS */
+        .current-grid, .forecast-grid {display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between;}
+        .metric {flex: 1; min-width: 120px; background: #f8f9fa; padding: 12px; border-radius: 8px; border-left: 4px solid #667eea; text-align: center;}
+        .metric-label {font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;}
+        .metric-value {font-size: 20px; font-weight: 700; color: #333;}
+
+        .wind-peak {background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; border-radius: 8px; margin: 12px 0; font-weight: 500; font-size: 14px;}
+        .wind-change {background: #f8f9fa; padding: 10px;                                                             border-radius: 6px; margin: 8px 0; border-left: 3px solid #28a745; font-size: 13px;}
+        .wind-change.decrease {border-left-color: #17a2b8;}
+        .wind-change-time {font-weight: 600; color: #667eea;}
+
+        .scroll-table {max-height: 400px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; margin: 12px 0;}
+        .combined-hourly {width: 100%; border-collapse: collapse; font-size: 12px;}
+        .combined-hourly th {background: #667eea; color: white; padding: 8px; text-align: left; font-weight: 600;}
+        .combined-hourly td {padding: 6px 8px; border-bottom: 1px solid #eee;}
+        .combined-hourly tr:hover {background: #f8f9fa;}
+        .hour-time {font-weight: 600; color: #667eea;}
+        .temp-cell {font-weight: 600;}
+        .wind-cell {color: #667eea; font-weight: 500;}
+
+        /* 7-DAY: HORIZONTAL SCROLL */
+        .seven-day-container {overflow-x: auto; white-space: nowrap; padding: 10px 0;}
+        .seven-day {display: inline-flex; gap: 12px;}
+        .day-card {background: #f8f9fa; border-radius: 10px; padding: 12px; min-width: 120px; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,0.05);}
+        .day-date {font-weight: 600; color: #667eea; font-size: 13px;}
+        .day-icon {width: 40px; height: 40px; margin: 6px auto;}
+        .day-temps {font-size: 16px; font-weight: 600; margin: 6px 0;}
+        .day-high {color: #d35400;}
+        .day-low {color: #2980b9;}
+        .day-wind {font-size: 12px; color: #555;}
+        .day-precip {font-size: 11px; color: #27ae60; margin-top: 4px;}
+
+        .footer {text-align: center; padding: 20px; color: #777; font-size: 13px; background: #f8f9fa;}
+        .quote-box {background: rgba(255,255,255,0.3); backdrop-filter: blur(10px); border-radius: 10px; padding: 15px 20px; margin-top: 15px; font-style: italic; border-left: 4px solid rgba(255,255,255,0.9);}
+        .source {font-size: 10px; color: #aaa; margin-top: 10px;}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>DAILY WEATHER REPORT</h1>
+            <h2>BIRCHDALE - MURPHY - SCHROEDER CREEK </h2>
+            <p>Sunday, November 09, 2025 at 04:12 PM PST</p>
+            <p class="source">It's only a forecast, always rely on your own senses! Built by Roy - Powered by OpenWeather API</p>
+            <div class="quote-box">"One small positive thought can change your whole day." — Zig Ziglar</div>
+        </div>
+
+        <!-- CURRENT CONDITIONS -->
+        <div class="section">
+            <h2>Current Conditions</h2>
+            <div class="current-grid">
+                <div class="metric"><div class="metric-label">Temperature</div><div class="metric-value">4.2°C</div></div>
+                <div class="metric"><div class="metric-label">Conditions</div><div class="metric-value">Overcast Clouds</div></div>
+                <div class="metric"><div class="metric-label">Humidity</div><div class="metric-value">91%</div></div>
+                <div class="metric"><div class="metric-label">Pressure</div><div class="metric-value">1031 hPa</div></div>
+                <div class="metric"><div class="metric-label">Wind</div><div class="metric-value">6.1 km/h</div></div>
+                <div class="metric"><div class="metric-label">Direction</div><div class="metric-value">SSE</div></div>
+            </div>
+        </div>
+
+                <!-- TODAY'S FORECAST -->
+        <div class="section">
+            <h2>Today's Forecast</h2>
+            <div class="forecast-grid">
+                <div class="metric"><div class="metric-label">High</div><div class="metric-value">8.5°C</div></div>
+                <div class="metric"><div class="metric-label">Low</div><div class="metric-value">2.0°C</div></div>
+                <div class="metric"><div class="metric-label">Precipitation</div><div class="metric-value">
+                    None expected
+                </div></div>
+                <div class="metric"><div class="metric-label">Sunrise</div><div class="metric-value">06:51 AM</div></div>
+                <div class="metric"><div class="metric-label">Sunset</div><div class="metric-value">04:11 PM</div></div>
+            </div>
+        </div>
+        
+        <!-- WIND -->
+        <div class="section">
+            <h2>Wind (Next 24 Hours)</h2>
+            <div class="wind-peak">Peak: 10.0 km/h SSE at 02:00 AM</div><p><strong>2 change(s):</strong></p><div class="wind-change decrease"><span class="wind-change-time">03:00 AM:</span> -4.7 km/h<br>10.0 to 5.3 km/h from S</div><div class="wind-change decrease"><span class="wind-change-time">04:00 AM:</span> -2.7 km/h<br>5.3 to 2.6 km/h from W</div></div>
+
+        <!-- 24-HOUR TABLE -->
+        <div class="section">
+            <h2>24-Hour Forecast</h2>
+            <div class="scroll-table">
+                <table class="combined-hourly">
+                    <thead><tr><th>Time</th><th>Temp</th><th>Cond</th><th>Wind km/h</th><th>Gust km/h</th><th>Dir</th></tr></thead>
+                    <tbody><tr><td class="hour-time">04:00 PM</td><td class="temp-cell">4.2°C</td><td>Clouds</td><td class="wind-cell">6.1</td><td class="wind-cell">5.3</td><td class="wind-cell">SSE</td></tr><tr><td class="hour-time">05:00 PM</td><td class="temp-cell">4.7°C</td><td>Clouds</td><td class="wind-cell">6.4</td><td class="wind-cell">5.7</td><td class="wind-cell">SE</td></tr><tr><td class="hour-time">06:00 PM</td><td class="temp-cell">4.9°C</td><td>Clouds</td><td class="wind-cell">5.7</td><td class="wind-cell">5.4</td><td class="wind-cell">SE</td></tr><tr><td class="hour-time">07:00 PM</td><td class="temp-cell">4.7°C</td><td>Clouds</td><td class="wind-cell">5.8</td><td class="wind-cell">5.5</td><td class="wind-cell">SE</td></tr><tr><td class="hour-time">08:00 PM</td><td class="temp-cell">4.6°C</td><td>Clouds</td><td class="wind-cell">5.8</td><td class="wind-cell">5.3</td><td class="wind-cell">SE</td></tr><tr><td class="hour-time">09:00 PM</td><td class="temp-cell">4.6°C</td><td>Clouds</td><td class="wind-cell">5.0</td><td class="wind-cell">4.7</td><td class="wind-cell">SE</td></tr><tr><td class="hour-time">10:00 PM</td><td class="temp-cell">4.2°C</td><td>Clouds</td><td class="wind-cell">5.7</td><td class="wind-cell">5.2</td><td class="wind-cell">SE</td></tr><tr><td class="hour-time">11:00 PM</td><td class="temp-cell">4.2°C</td><td>Clouds</td><td class="wind-cell">5.9</td><td class="wind-cell">5.4</td><td class="wind-cell">SE</td></tr><tr><td class="hour-time">12:00 AM</td><td class="temp-cell">5.4°C</td><td>Clouds</td><td class="wind-cell">6.6</td><td class="wind-cell">10.0</td><td class="wind-cell">SE</td></tr><tr><td class="hour-time">01:00 AM</td><td class="temp-cell">5.5°C</td><td>Clouds</td><td class="wind-cell">7.6</td><td class="wind-cell">10.2</td><td class="wind-cell">SE</td></tr><tr><td class="hour-time">02:00 AM</td><td class="temp-cell">6.8°C</td><td>Clouds</td><td class="wind-cell">10.0</td><td class="wind-cell">21.5</td><td class="wind-cell">SSE</td></tr><tr><td class="hour-time">03:00 AM</td><td class="temp-cell">6.0°C</td><td>Clouds</td><td class="wind-cell">5.3</td><td class="wind-cell">8.2</td><td class="wind-cell">S</td></tr><tr><td class="hour-time">04:00 AM</td><td class="temp-cell">5.4°C</td><td>Clouds</td><td class="wind-cell">2.6</td><td class="wind-cell">4.3</td><td class="wind-cell">W</td></tr><tr><td class="hour-time">05:00 AM</td><td class="temp-cell">5.9°C</td><td>Clouds</td><td class="wind-cell">2.4</td><td class="wind-cell">3.8</td><td class="wind-cell">SSW</td></tr><tr><td class="hour-time">06:00 AM</td><td class="temp-cell">5.6°C</td><td>Rain</td><td class="wind-cell">3.0</td><td class="wind-cell">4.7</td><td class="wind-cell">SW</td></tr><tr><td class="hour-time">07:00 AM</td><td class="temp-cell">5.0°C</td><td>Rain</td><td class="wind-cell">5.2</td><td class="wind-cell">8.5</td><td class="wind-cell">SSW</td></tr><tr><td class="hour-time">08:00 AM</td><td class="temp-cell">5.7°C</td><td>Rain</td><td class="wind-cell">7.3</td><td class="wind-cell">12.9</td><td class="wind-cell">S</td></tr><tr><td class="hour-time">09:00 AM</td><td class="temp-cell">8.0°C</td><td>Clouds</td><td class="wind-cell">7.3</td><td class="wind-cell">10.8</td><td class="wind-cell">SSW</td></tr><tr><td class="hour-time">10:00 AM</td><td class="temp-cell">8.2°C</td><td>Clouds</td><td class="wind-cell">6.5</td><td class="wind-cell">9.8</td><td class="wind-cell">SW</td></tr><tr><td class="hour-time">11:00 AM</td><td class="temp-cell">8.9°C</td><td>Clouds</td><td class="wind-cell">6.8</td><td class="wind-cell">9.6</td><td class="wind-cell">SW</td></tr><tr><td class="hour-time">12:00 PM</td><td class="temp-cell">9.2°C</td><td>Clouds</td><td class="wind-cell">4.9</td><td class="wind-cell">7.2</td><td class="wind-cell">SW</td></tr><tr><td class="hour-time">01:00 PM</td><td class="temp-cell">9.2°C</td><td>Clouds</td><td class="wind-cell">4.5</td><td class="wind-cell">6.7</td><td class="wind-cell">SW</td></tr><tr><td class="hour-time">02:00 PM</td><td class="temp-cell">9.0°C</td><td>Clouds</td><td class="wind-cell">3.9</td><td class="wind-cell">5.7</td><td class="wind-cell">SW</td></tr><tr><td class="hour-time">03:00 PM</td><td class="temp-cell">8.5°C</td><td>Clouds</td><td class="wind-cell">4.4</td><td class="wind-cell">5.5</td><td class="wind-cell">SW</td></tr><tr><td class="hour-time">04:00 PM</td><td class="temp-cell">7.8°C</td><td>Clouds</td><td class="wind-cell">4.0</td><td class="wind-cell">4.1</td><td class="wind-cell">SW</td></tr></tbody></table></div>
+        </div>
+
+        <!-- 7-DAY: HORIZONTAL SCROLL -->
+        <div class="section">
+            <h2>7-Day Forecast</h2>
+            <div class="seven-day-container">
+                <div class="seven-day">
+                    <div class="day-card">
+                        <div class="day-date">Mon Nov 10</div>
+                        <img src="https://openweathermap.org/img/wn/10d@2x.png" class="day-icon" alt="Moderate Rain">
+                        <div class="day-temps">
+                            <span class="day-high">9°</span> / <span class="day-low">5°</span>
+                        </div>
+                        <div class="day-wind">10 km/h SSE</div><div class="day-precip">Precip: 2.8 mm</div><div style='font-size:10px; color:#777; margin-top:3px;'>Moderate Rain</div></div>
+                    <div class="day-card">
+                        <div class="day-date">Tue Nov 11</div>
+                        <img src="https://openweathermap.org/img/wn/04d@2x.png" class="day-icon" alt="Overcast Clouds">
+                        <div class="day-temps">
+                            <span class="day-high">8°</span> / <span class="day-low">3°</span>
+                        </div>
+                        <div class="day-wind">5 km/h SE</div><div style='font-size:10px; color:#777; margin-top:3px;'>Overcast Clouds</div></div>
+                    <div class="day-card">
+                        <div class="day-date">Wed Nov 12</div>
+                        <img src="https://openweathermap.org/img/wn/10d@2x.png" class="day-icon" alt="Light Rain">
+                        <div class="day-temps">
+                            <span class="day-high">9°</span> / <span class="day-low">2°</span>
+                        </div>
+                        <div class="day-wind">6 km/h SSE</div><div class="day-precip">Precip: 2.5 mm</div><div style='font-size:10px; color:#777; margin-top:3px;'>Light Rain</div></div>
+                    <div class="day-card">
+                        <div class="day-date">Thu Nov 13</div>
+                        <img src="https://openweathermap.org/img/wn/13d@2x.png" class="day-icon" alt="Rain And Snow">
+                        <div class="day-temps">
+                            <span class="day-high">9°</span> / <span class="day-low">3°</span>
+                        </div>
+                        <div class="day-wind">11 km/h SSE</div><div class="day-precip">Precip: 8.1 mm</div><div style='font-size:10px; color:#777; margin-top:3px;'>Rain And Snow</div></div>
+                    <div class="day-card">
+                        <div class="day-date">Fri Nov 14</div>
+                        <img src="https://openweathermap.org/img/wn/13d@2x.png" class="day-icon" alt="Snow">
+                        <div class="day-temps">
+                            <span class="day-high">4°</span> / <span class="day-low">-2°</span>
+                        </div>
+                        <div class="day-wind">7 km/h SW</div><div class="day-precip">Precip: 11.4 mm</div><div style='font-size:10px; color:#777; margin-top:3px;'>Snow</div></div>
+                    <div class="day-card">
+                        <div class="day-date">Sat Nov 15</div>
+                        <img src="https://openweathermap.org/img/wn/13d@2x.png" class="day-icon" alt="Light Snow">
+                        <div class="day-temps">
+                            <span class="day-high">4°</span> / <span class="day-low">-5°</span>
+                        </div>
+                        <div class="day-wind">5 km/h S</div><div class="day-precip">Precip: 0.4 mm</div><div style='font-size:10px; color:#777; margin-top:3px;'>Light Snow</div></div>
+                    <div class="day-card">
+                        <div class="day-date">Sun Nov 16</div>
+                        <img src="https://openweathermap.org/img/wn/04d@2x.png" class="day-icon" alt="Overcast Clouds">
+                        <div class="day-temps">
+                            <span class="day-high">7°</span> / <span class="day-low">-2°</span>
+                        </div>
+                        <div class="day-wind">6 km/h S</div><div style='font-size:10px; color:#777; margin-top:3px;'>Overcast Clouds</div></div></div>
+            </div>
+        </div>
+
+        <!-- FOOTER -->
+        <div class="footer">
+            <p><strong>Have a great day!</strong></p>
+            <p style="font-size:11px;color:#999;margin-top:8px;">Automated 24-hour report for Birchdale</p>
+             <p style="font-size:11px;color:#999;margin-top:8px;">Reply to this email to be removed from it</p>
+        </div>
+    </div>
+</body>
+</html>
