@@ -54,7 +54,7 @@ print("Fetching weather from OpenWeather One Call 3.0...")
 params = {
     "lat": LAT,
     "lon": LON,
-    "appid": OPENWEATHER_API_KEY,
+    "appid": os.getenv("OPENWEATHER_API_KEY"),
     "units": "metric",
     "exclude": "minutely,alerts"
 }
