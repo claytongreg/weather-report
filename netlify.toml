@@ -1,0 +1,32 @@
+# Netlify Configuration File
+
+[build]
+  # Directory with the serverless functions
+  functions = "netlify/functions"
+  
+  # Directory to publish (where index.html lives)
+  publish = "public"
+  
+  # Build command (none needed for static site)
+  command = ""
+
+# Redirect rules (optional, for clean URLs)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Headers for better caching and security
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Cache weather function responses for 5 minutes
+[[headers]]
+  for = "/.netlify/functions/weather"
+  [headers.values]
+    Cache-Control = "public, max-age=300"
