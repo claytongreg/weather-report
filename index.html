@@ -1,1 +1,52 @@
-<h1>Hello World</h1> 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Birchdale Weather Report</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; margin: 50px; background: #f0f8ff; }
+    h1 { color: #4682b4; }
+    #weather { font-size: 24px; margin: 20px; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    button { padding: 10px 20px; font-size: 16px; background: #4682b4; color: white; border: none; border-radius: 5px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>Birchdale Weather Report</h1>
+  <p>Live weather for lat: 50.038417, lon: -116.892033</p>
+  <button onclick="getWeather()">Get Current Weather</button>
+  <div id="weather">Click button to load weather data.</div>
+
+  <script>
+    let API_KEY = localStorage.getItem("weather_key");
+    if (!API_KEY) {
+      API_KEY = prompt("Enter your OpenWeather API key (free from openweathermap.org):");
+      if (API_KEY) localStorage.setItem("weather_key", API_KEY);
+    }
+
+    async function getWeather() {
+      if (!API_KEY) {
+        document.getElementById("weather").innerHTML = "<p>Please enter API key first.</p>";
+        return;
+      }
+
+      const url = `https://api.openweathermap.org/data/3.0/onecall?lat=50.038417&lon=-116.892033&appid=${API_KEY}&units=metric&exclude=minutely,alerts`;
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        const data = await res.json();
+        const current = data.current;
+        document.getElementById("weather").innerHTML = `
+          <h2>${current.temp}°C</h2>
+          <p>${current.weather[0].description}</p>
+          <p>Feels like: ${current.feels_like}°C</p>
+          <p>Wind: ${current.wind_speed} m/s</p>
+          <p>Humidity: ${current.humidity}%</p>
+        `;
+      } catch (error) {
+        document.getElementById("weather").innerHTML = `<p>Error: ${error.message}. Check API key.</p>`;
+      }
+    }
+  </script>
+</body>
+</html>
