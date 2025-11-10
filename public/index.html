@@ -241,6 +241,77 @@
       color: #999;
     }
     
+    /* 7-DAY FORECAST STYLES */
+    .seven-day-section {
+      padding: 30px;
+      border-top: 2px solid #eee;
+      background: #f8f9fa;
+    }
+    .seven-day-container {
+      overflow-x: auto;
+      white-space: nowrap;
+      padding: 10px 0;
+    }
+    .seven-day-forecast {
+      display: inline-flex;
+      gap: 12px;
+    }
+    .day-card {
+      background: white;
+      border-radius: 12px;
+      padding: 15px;
+      min-width: 140px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      border: 2px solid #e0e0e0;
+      transition: all 0.3s;
+    }
+    .day-card:hover {
+      border-color: #667eea;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);
+    }
+    .day-date {
+      font-weight: 600;
+      color: #667eea;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+    .day-icon {
+      width: 50px;
+      height: 50px;
+      margin: 8px auto;
+    }
+    .day-temps {
+      font-size: 18px;
+      font-weight: 600;
+      margin: 8px 0;
+    }
+    .day-high {
+      color: #d35400;
+    }
+    .day-low {
+      color: #2980b9;
+    }
+    .day-wind {
+      font-size: 13px;
+      color: #555;
+      margin: 6px 0;
+    }
+    .day-precip {
+      font-size: 12px;
+      color: #27ae60;
+      margin-top: 6px;
+      font-weight: 500;
+    }
+    .day-description {
+      font-size: 11px;
+      color: #777;
+      margin-top: 6px;
+      white-space: normal;
+      line-height: 1.3;
+    }
+    
     .footer {
       background: #f8f9fa;
       padding: 20px;
@@ -313,6 +384,10 @@
       .hour-card {
         flex: 0 0 120px;
       }
+      .day-card {
+        min-width: 130px;
+        padding: 12px;
+      }
     }
   </style>
 </head>
@@ -333,6 +408,14 @@
     <div id="forecast-section" class="forecast-section" style="display: none;">
       <div class="forecast-title">🌬️ Next 12 Hours - Wind Forecast</div>
       <div id="hourly-forecast" class="hourly-forecast"></div>
+    </div>
+
+    <!-- NEW 7-DAY FORECAST SECTION -->
+    <div id="seven-day-section" class="seven-day-section" style="display: none;">
+      <div class="forecast-title">📅 7-Day Forecast</div>
+      <div class="seven-day-container">
+        <div id="seven-day-forecast" class="seven-day-forecast"></div>
+      </div>
     </div>
     
     <div class="footer">
@@ -375,6 +458,16 @@
       });
     }
     
+    function formatDayDate(timestamp) {
+      const date = new Date(timestamp * 1000);
+      return date.toLocaleString('en-US', {
+        timeZone: 'America/Los_Angeles',
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric'
+      });
+    }
+    
     function getPrecipType(hour) {
       if (hour.rain && hour.rain > 0) return 'Rain';
       if (hour.snow && hour.snow > 0) return 'Snow';
@@ -387,10 +480,18 @@
       return rain + snow;
     }
     
+    function getDayPrecip(day) {
+      const rain = day.rain || 0;
+      const snow = day.snow || 0;
+      return rain + snow;
+    }
+    
     async function loadWeather() {
       const content = document.getElementById('weather-content');
       const forecastSection = document.getElementById('forecast-section');
       const hourlyForecast = document.getElementById('hourly-forecast');
+      const sevenDaySection = document.getElementById('seven-day-section');
+      const sevenDayForecast = document.getElementById('seven-day-forecast');
       const updateTime = document.getElementById('update-time');
       
       // Show loading state
@@ -401,6 +502,7 @@
         </div>
       `;
       forecastSection.style.display = 'none';
+      sevenDaySection.style.display = 'none';
       
       try {
         // Call the Netlify serverless function (no API key needed!)
@@ -419,6 +521,7 @@
         const current = data.current;
         const today = data.daily[0];
         const hourly = data.hourly;
+        const daily = data.daily;
         
         // Calculate values
         const temp = current.temp.toFixed(1);
@@ -543,7 +646,35 @@
           `;
         }
         
+        // Update 7-day forecast
+        sevenDayForecast.innerHTML = '';
+        for (let i = 1; i < 8 && i < daily.length; i++) {
+          const day = daily[i];
+          const dayDate = formatDayDate(day.dt);
+          const dayHigh = day.temp.max.toFixed(0);
+          const dayLow = day.temp.min.toFixed(0);
+          const dayWind = (day.wind_speed * 3.6).toFixed(0);
+          const dayDir = getCardinalDirection(day.wind_deg);
+          const dayIcon = day.weather[0].icon;
+          const dayDesc = day.weather[0].description;
+          const dayPrecip = getDayPrecip(day);
+          
+          sevenDayForecast.innerHTML += `
+            <div class="day-card">
+              <div class="day-date">${dayDate}</div>
+              <img src="https://openweathermap.org/img/wn/${dayIcon}@2x.png" class="day-icon" alt="${dayDesc}">
+              <div class="day-temps">
+                <span class="day-high">${dayHigh}°</span> / <span class="day-low">${dayLow}°</span>
+              </div>
+              <div class="day-wind">${dayWind} km/h ${dayDir}</div>
+              ${dayPrecip > 0 ? `<div class="day-precip">Precip: ${dayPrecip.toFixed(1)} mm</div>` : ''}
+              <div class="day-description">${dayDesc}</div>
+            </div>
+          `;
+        }
+        
         forecastSection.style.display = 'block';
+        sevenDaySection.style.display = 'block';
         updateTime.textContent = `Last updated: ${formatTime(current.dt)}`;
         
       } catch (error) {
