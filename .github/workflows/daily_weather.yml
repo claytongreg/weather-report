@@ -21,26 +21,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests twilio
 
-      - name: Generate keys.py from secrets
-        env:
-          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
-          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
-          EMAIL_TO: ${{ secrets.EMAIL_TO }}
-          TWILIO_SID: ${{ secrets.TWILIO_SID }}
-          TWILIO_TOKEN: ${{ secrets.TWILIO_TOKEN }}
-          TWILIO_PHONE: ${{ secrets.TWILIO_PHONE }}
-          OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
-        run: >-
-          cat > keys.py << 'EOF'
-          EMAIL_FROM = "$EMAIL_FROM"
-          EMAIL_PASSWORD = "$EMAIL_PASSWORD"
-          EMAIL_TO = "$EMAIL_TO".split(", ")
-          TWILIO_SID = "$TWILIO_SID"
-          TWILIO_TOKEN = "$TWILIO_TOKEN"
-          TWILIO_PHONE = "$TWILIO_PHONE"
-          OPENWEATHER_API_KEY = "$OPENWEATHER_API_KEY"
-          EOF
-
       - name: Run weather script
         run: python main.py
 
