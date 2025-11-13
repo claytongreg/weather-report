@@ -249,8 +249,8 @@ def create_lake_chart():
         ax.grid(True, alpha=0.3, linestyle='-', linewidth=0.5)
         ax.set_axisbelow(True)
         
-        current_level = daily_data["Queen's Bay (ft)"].iloc[-1]
-        ax.set_ylim(max(1737, current_level - 8), min(1755, current_level + 8))
+        # Fixed Y-axis range: 1737 to 1755 feet
+        ax.set_ylim(1737, 1755)
         
         # Set x-axis to show full year (Jan 1 - Dec 31 of current year)
         import datetime
