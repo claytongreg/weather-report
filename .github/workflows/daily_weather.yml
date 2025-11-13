@@ -1,8 +1,8 @@
-name: Daily Birchdale Weather Report
+name: Daily Birchdale Weather & Lake Report
 
 on:
   schedule:
-    - cron: '0 13 * * *'   # 6 AM Pacific (1 PM UTC)
+    - cron: '0 13 * * *'   # 6 AM Pacific (1 PM UTC) - runs daily
   workflow_dispatch:        # Allows manual trigger from Actions tab
 
 permissions:
@@ -35,12 +35,12 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests twilio pytz
+          pip install requests twilio pytz beautifulsoup4 pandas matplotlib
       
-      - name: Run weather script and generate index.html
+      - name: Run weather & lake monitoring script
         run: python main.py
       
-      - name: Check if index.html was generated
+      - name: Check if files were generated
         run: |
           if [ -f index.html ]; then
             echo "✓ index.html generated successfully"
@@ -49,20 +49,37 @@ jobs:
             echo "✗ ERROR: index.html was not generated!"
             exit 1
           fi
+          
+          if [ -f public/lake_chart.png ]; then
+            echo "✓ Lake chart generated successfully"
+            ls -lh public/lake_chart.png
+          else
+            echo "⚠ Warning: Lake chart not generated (may need more data)"
+          fi
+          
+          if [ -f lake_data_history.csv ]; then
+            echo "✓ Lake history CSV exists"
+            echo "Data points:"
+            wc -l lake_data_history.csv
+          fi
       
-      - name: Commit and push index.html
+      - name: Commit and push updates
         run: |
-          git config --local user.name "Weather Bot"
+          git config --local user.name "Weather & Lake Bot"
           git config --local user.email "weather-bot@github-actions"
+          
+          # Add all generated files
           git add index.html weather_report.html
+          git add public/lake_chart.png 2>/dev/null || true
+          git add lake_data_history.csv 2>/dev/null || true
           
           # Check if there are changes to commit
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Update weather report - $(date +'%Y-%m-%d %I:%M %p PST') [skip ci]"
+            git commit -m "Update weather & lake data - $(date +'%Y-%m-%d %I:%M %p PST') [skip ci]"
             git push
-            echo "✓ Weather data pushed to GitHub Pages"
+            echo "✓ Weather & lake data pushed to GitHub Pages"
           fi
       
       - name: Deployment status
@@ -72,6 +89,7 @@ jobs:
           echo "✓ Workflow completed successfully!"
           echo "✓ Email sent to recipients"
           echo "✓ GitHub Pages updated"
+          echo "✓ Lake level data collected"
           echo "✓ Site available at: https://claytongreg.github.io/weather-report/"
           echo "========================================="
       
