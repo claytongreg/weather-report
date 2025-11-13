@@ -327,10 +327,10 @@ def generate_index_html(weather_data, lake_data=None):
         print(f"  ✓ Lake data available: Queen's Bay = {lake_data.get('queens_ft', 'N/A')} ft")
         lake_section = f"""
     <!-- KOOTENAY LAKE LEVELS SECTION -->
-    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-top: 2px solid #eee;">
-      <h2 style="font-size: 22px; color: white; margin-bottom: 20px; font-weight: 600; text-align: center;">🌊 Kootenay Lake Levels</h2>
+    <div style="padding: 30px; border-top: 2px solid #eee; background: #f8f9fa;">
+      <h2 style="font-size: 22px; color: #667eea; margin-bottom: 20px; font-weight: 600; text-align: center;">🌊 Kootenay Lake Levels</h2>
       
-      <div style="background: rgba(255,255,255,0.1); border-radius: 12px; padding: 20px; max-width: 900px; margin: 0 auto;">
+      <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 20px; color: white;">
         <!-- Data Cards - Horizontal Row -->
         <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-bottom: 20px;">
           <div style="background: rgba(255,255,255,0.15); padding: 15px; border-radius: 8px; text-align: center; min-width: 140px; flex: 0 1 auto;">
@@ -383,38 +383,43 @@ def generate_index_html(weather_data, lake_data=None):
     </div>
 """
         
-        # Clean up any orphaned closing divs before inserting
-        # Find where to insert - should be inside the container, before the closing container div
+        # Insert lake section INSIDE the container div, before the footer
+        # Look for the footer div or the last section inside container
         import re
         
-        # Look for the footer closing or the last section before </body>
-        # The container div should close right before </body>
+        # Find the footer section
+        footer_match = re.search(r'<div class="footer">', html_content)
         
-        # Strategy: Insert before the closing </div> that's right before </body>
-        # This should be the container's closing div
-        
-        # Find </body>
-        body_pos = html_content.rfind('</body>')
-        if body_pos > 0:
-            # Work backwards to find the last </div> before </body>
-            search_start = max(0, body_pos - 200)
-            last_content = html_content[search_start:body_pos]
-            
-            # Find the last </div> in this section
-            last_div_pos = last_content.rfind('</div>')
-            
-            if last_div_pos >= 0:
-                # Insert lake section before this closing div
-                insert_pos = search_start + last_div_pos
-                html_content = html_content[:insert_pos] + '\n' + lake_section + '\n' + html_content[insert_pos:]
-                print("  ✓ Lake section inserted inside container")
-            else:
-                # Fallback: insert before </body>
-                html_content = html_content.replace('</body>', f'{lake_section}</body>', 1)
-                print("  ✓ Lake section added before </body> (fallback)")
+        if footer_match:
+            # Insert right before the footer
+            insert_pos = footer_match.start()
+            html_content = html_content[:insert_pos] + lake_section + '\n    ' + html_content[insert_pos:]
+            print("  ✓ Lake section inserted before footer (inside container)")
         else:
-            html_content += lake_section
-            print("  ✓ Lake section appended to end")
+            # Fallback: look for closing container div
+            # The container should close right before </body>
+            # Find the second-to-last </div> before </body>
+            body_pos = html_content.rfind('</body>')
+            if body_pos > 0:
+                # Get the last 500 chars before </body>
+                search_area = html_content[max(0, body_pos-500):body_pos]
+                
+                # Find all </div> positions
+                div_positions = [m.start() for m in re.finditer(r'</div>', search_area)]
+                
+                if len(div_positions) >= 2:
+                    # Insert before the second-to-last </div> (which should be container closing)
+                    insert_relative = div_positions[-2]
+                    insert_absolute = max(0, body_pos-500) + insert_relative
+                    html_content = html_content[:insert_absolute] + '\n' + lake_section + '\n    ' + html_content[insert_absolute:]
+                    print("  ✓ Lake section inserted inside container (before closing div)")
+                else:
+                    # Last resort: just before </body>
+                    html_content = html_content.replace('</body>', f'{lake_section}\n</body>', 1)
+                    print("  ⚠ Lake section added before </body> (fallback)")
+            else:
+                html_content += lake_section
+                print("  ⚠ Lake section appended to end")
     
     # Write back to public/index.html (Netlify will deploy this)
     with open('public/index.html', 'w', encoding='utf-8') as f:
