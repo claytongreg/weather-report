@@ -327,44 +327,44 @@ def generate_index_html(weather_data, lake_data=None):
         print(f"  ✓ Lake data available: Queen's Bay = {lake_data.get('queens_ft', 'N/A')} ft")
         lake_section = f"""
     <!-- KOOTENAY LAKE LEVELS SECTION -->
-    <div class="seven-day-section" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
-      <h2 class="forecast-title" style="color: white;">🌊 Kootenay Lake Levels</h2>
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-top: 2px solid #eee;">
+      <h2 style="font-size: 22px; color: white; margin-bottom: 20px; font-weight: 600; text-align: center;">🌊 Kootenay Lake Levels</h2>
       
-      <div style="background: rgba(255,255,255,0.1); border-radius: 12px; padding: 15px; margin-bottom: 20px;">
+      <div style="background: rgba(255,255,255,0.1); border-radius: 12px; padding: 20px; max-width: 900px; margin: 0 auto;">
         <!-- Data Cards - Horizontal Row -->
-        <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-bottom: 15px;">
-          <div style="background: rgba(255,255,255,0.15); padding: 12px; border-radius: 8px; text-align: center; min-width: 140px; flex: 0 1 auto;">
-            <div style="font-size: 11px; opacity: 0.9; margin-bottom: 5px;">QUEEN'S BAY</div>
-            <div style="font-size: 24px; font-weight: 700;">{lake_data.get('queens_ft', 'N/A')}</div>
-            <div style="font-size: 12px; opacity: 0.8;">feet</div>
-            <div style="font-size: 10px; opacity: 0.7; margin-top: 3px;">({lake_data.get('queens_m', 'N/A')} m)</div>
+        <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-bottom: 20px;">
+          <div style="background: rgba(255,255,255,0.15); padding: 15px; border-radius: 8px; text-align: center; min-width: 140px; flex: 0 1 auto;">
+            <div style="font-size: 11px; opacity: 0.9; margin-bottom: 5px; text-transform: uppercase;">QUEEN'S BAY</div>
+            <div style="font-size: 28px; font-weight: 700;">{lake_data.get('queens_ft', 'N/A')}</div>
+            <div style="font-size: 13px; opacity: 0.8;">feet</div>
+            <div style="font-size: 11px; opacity: 0.7; margin-top: 3px;">({lake_data.get('queens_m', 'N/A')} m)</div>
           </div>
           
-          <div style="background: rgba(255,255,255,0.15); padding: 12px; border-radius: 8px; text-align: center; min-width: 140px; flex: 0 1 auto;">
-            <div style="font-size: 11px; opacity: 0.9; margin-bottom: 5px;">NELSON</div>
-            <div style="font-size: 24px; font-weight: 700;">{lake_data.get('nelson_ft', 'N/A')}</div>
-            <div style="font-size: 12px; opacity: 0.8;">feet</div>
-            <div style="font-size: 10px; opacity: 0.7; margin-top: 3px;">({lake_data.get('nelson_m', 'N/A')} m)</div>
+          <div style="background: rgba(255,255,255,0.15); padding: 15px; border-radius: 8px; text-align: center; min-width: 140px; flex: 0 1 auto;">
+            <div style="font-size: 11px; opacity: 0.9; margin-bottom: 5px; text-transform: uppercase;">NELSON</div>
+            <div style="font-size: 28px; font-weight: 700;">{lake_data.get('nelson_ft', 'N/A')}</div>
+            <div style="font-size: 13px; opacity: 0.8;">feet</div>
+            <div style="font-size: 11px; opacity: 0.7; margin-top: 3px;">({lake_data.get('nelson_m', 'N/A')} m)</div>
           </div>
 """
         
         if 'forecast_level' in lake_data and lake_data.get('forecast_level'):
             lake_section += f"""
-          <div style="background: rgba(255,255,255,0.15); padding: 12px; border-radius: 8px; text-align: center; min-width: 140px; flex: 0 1 auto;">
-            <div style="font-size: 11px; opacity: 0.9; margin-bottom: 5px;">FORECAST</div>
-            <div style="font-size: 24px; font-weight: 700;">{lake_data['forecast_level']}</div>
-            <div style="font-size: 12px; opacity: 0.8;">feet</div>
-            <div style="font-size: 10px; opacity: 0.7; margin-top: 3px;">{lake_data.get('forecast_trend', '').title()} by {lake_data.get('forecast_date', '')}</div>
+          <div style="background: rgba(255,255,255,0.15); padding: 15px; border-radius: 8px; text-align: center; min-width: 140px; flex: 0 1 auto;">
+            <div style="font-size: 11px; opacity: 0.9; margin-bottom: 5px; text-transform: uppercase;">FORECAST</div>
+            <div style="font-size: 28px; font-weight: 700;">{lake_data['forecast_level']}</div>
+            <div style="font-size: 13px; opacity: 0.8;">feet</div>
+            <div style="font-size: 11px; opacity: 0.7; margin-top: 3px;">{lake_data.get('forecast_trend', '').title()} by {lake_data.get('forecast_date', '')}</div>
           </div>
 """
         
         if 'discharge_cfs' in lake_data and lake_data.get('discharge_cfs'):
             lake_section += f"""
-          <div style="background: rgba(255,255,255,0.15); padding: 12px; border-radius: 8px; text-align: center; min-width: 140px; flex: 0 1 auto;">
-            <div style="font-size: 11px; opacity: 0.9; margin-bottom: 5px;">DISCHARGE</div>
-            <div style="font-size: 24px; font-weight: 700;">{lake_data['discharge_cfs']}</div>
-            <div style="font-size: 12px; opacity: 0.8;">cfs</div>
-            <div style="font-size: 10px; opacity: 0.7; margin-top: 3px;">{lake_data.get('discharge_location', '')} - {lake_data.get('discharge_date', '')}</div>
+          <div style="background: rgba(255,255,255,0.15); padding: 15px; border-radius: 8px; text-align: center; min-width: 140px; flex: 0 1 auto;">
+            <div style="font-size: 11px; opacity: 0.9; margin-bottom: 5px; text-transform: uppercase;">DISCHARGE</div>
+            <div style="font-size: 28px; font-weight: 700;">{lake_data['discharge_cfs']}</div>
+            <div style="font-size: 13px; opacity: 0.8;">cfs</div>
+            <div style="font-size: 11px; opacity: 0.7; margin-top: 3px;">{lake_data.get('discharge_location', '')} - {lake_data.get('discharge_date', '')}</div>
           </div>
 """
         
@@ -372,11 +372,11 @@ def generate_index_html(weather_data, lake_data=None):
         </div>
         
         <!-- Lake Chart - Full Width Below Cards -->
-        <div style="background: white; border-radius: 12px; padding: 10px; margin-top: 15px; width: 100%;">
+        <div style="background: white; border-radius: 12px; padding: 15px; margin-top: 20px;">
           <img src="lake_chart.png" alt="Kootenay Lake Level Chart" style="width: 100%; height: auto; border-radius: 8px; display: block;">
         </div>
         
-        <div style="text-align: center; margin-top: 12px; font-size: 11px; opacity: 0.8;">
+        <div style="text-align: center; margin-top: 15px; font-size: 12px; opacity: 0.8;">
           Data from FortisBC | Updated Daily at 6 AM PST
         </div>
       </div>
@@ -384,26 +384,37 @@ def generate_index_html(weather_data, lake_data=None):
 """
         
         # Clean up any orphaned closing divs before inserting
-        # Remove any stray closing divs between </script> and </body>
+        # Find where to insert - should be inside the container, before the closing container div
         import re
-        # Find the script end and body tag
-        script_end = html_content.rfind('</script>')
-        body_end = html_content.rfind('</body>')
         
-        if script_end > 0 and body_end > script_end:
-            # Get the content between script and body
-            between = html_content[script_end + 9:body_end]
-            # Remove it and replace with just the lake section
-            html_content = html_content[:script_end + 9] + '\n' + lake_section + '\n</body>\n</html>'
-            print("  ✓ Lake section inserted, cleaned up orphaned tags")
-        else:
-            # Fallback: simple insertion
-            if '</body>' in html_content:
-                html_content = html_content.replace('</body>', f'{lake_section}</body>', 1)
-                print("  ✓ Lake section added before </body>")
+        # Look for the footer closing or the last section before </body>
+        # The container div should close right before </body>
+        
+        # Strategy: Insert before the closing </div> that's right before </body>
+        # This should be the container's closing div
+        
+        # Find </body>
+        body_pos = html_content.rfind('</body>')
+        if body_pos > 0:
+            # Work backwards to find the last </div> before </body>
+            search_start = max(0, body_pos - 200)
+            last_content = html_content[search_start:body_pos]
+            
+            # Find the last </div> in this section
+            last_div_pos = last_content.rfind('</div>')
+            
+            if last_div_pos >= 0:
+                # Insert lake section before this closing div
+                insert_pos = search_start + last_div_pos
+                html_content = html_content[:insert_pos] + '\n' + lake_section + '\n' + html_content[insert_pos:]
+                print("  ✓ Lake section inserted inside container")
             else:
-                html_content += lake_section
-                print("  ✓ Lake section appended to end of HTML")
+                # Fallback: insert before </body>
+                html_content = html_content.replace('</body>', f'{lake_section}</body>', 1)
+                print("  ✓ Lake section added before </body> (fallback)")
+        else:
+            html_content += lake_section
+            print("  ✓ Lake section appended to end")
     
     # Write back to public/index.html (Netlify will deploy this)
     with open('public/index.html', 'w', encoding='utf-8') as f:
