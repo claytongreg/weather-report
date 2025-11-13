@@ -81,6 +81,9 @@ jobs:
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
+            # Pull any remote changes first to avoid conflicts
+            git pull --rebase origin main || true
+            
             git commit -m "Update weather & lake data - $(date +'%Y-%m-%d %I:%M %p PST') [skip ci]"
             git push
             echo "✓ Weather & lake data pushed to repository"
