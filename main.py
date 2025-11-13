@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Birchdale Weather Report - Enhanced with Kootenay Lake Levels
-Fetches weather, lake data, updates Google Sheets, generates chart, and updates index.html
+FOR NETLIFY: Saves files to public/ directory
 """
 import os
 import requests
@@ -35,11 +35,9 @@ def setup_google_sheets():
     """Initialize Google Sheets API connection"""
     SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
     
-    # Handle both file path and JSON string for credentials
     if os.path.exists(CREDENTIALS_FILE):
         creds = Credentials.from_service_account_file(CREDENTIALS_FILE, scopes=SCOPES)
     else:
-        # If credentials are provided as environment variable (base64 encoded JSON)
         import json
         import base64
         creds_json = os.environ.get('GOOGLE_CREDENTIALS_JSON')
@@ -98,7 +96,6 @@ def read_from_sheets():
         if len(values) < 2:
             return None
         
-        # Convert to DataFrame
         df = pd.DataFrame(values[1:], columns=values[0])
         return df
     except Exception as e:
@@ -123,7 +120,6 @@ def scrape_lake_data():
         soup = BeautifulSoup(response.text, 'html.parser')
         text = soup.get_text()
         
-        # Parse data
         queens_match = re.search(r"Queen['\u2019]s\s*Bay:?\s*(\d+\.\d+)\s*feet\s*\((\d+\.\d+)\s*meters\)\s*as of\s*([^\n]+)", text, re.IGNORECASE)
         nelson_match = re.search(r"Nelson:?\s*(\d+\.\d+)\s*feet\s*\((\d+\.\d+)\s*meters\)\s*as of\s*([^\n]+)", text, re.IGNORECASE)
         forecast_match = re.search(r"Lake level forecast[^:]*:[\s\n]*Kootenay Lake is forecast to\s+(\w+)\s+to\s+(\d+\.\d+)\s+at\s+(Queens?\s*Bay|Nelson)\s+by\s+([^\n\.]+)", text, re.IGNORECASE | re.DOTALL)
@@ -188,13 +184,11 @@ def create_lake_chart():
             print("  ⚠ Not enough data for chart yet (need at least 2 days)")
             return False
         
-        # Process data
         df['Scrape Time'] = pd.to_datetime(df['Scrape Time'], errors='coerce')
         df['Date'] = df['Scrape Time'].dt.date
         df['Date'] = pd.to_datetime(df['Date'])
         df["Queen's Bay (ft)"] = pd.to_numeric(df["Queen's Bay (ft)"], errors='coerce')
         
-        # Get daily averages
         daily_data = df.groupby('Date').agg({
             "Queen's Bay (ft)": 'mean',
             'Forecast Level': 'first',
@@ -209,15 +203,12 @@ def create_lake_chart():
         
         print(f"  ✓ Plotting {len(daily_data)} days of data")
         
-        # Create figure
         fig, ax = plt.subplots(figsize=(12, 6))
         
-        # Plot data
         ax.plot(daily_data['Date'], daily_data["Queen's Bay (ft)"], 
                 color='#e74c3c', linewidth=3, marker='o', markersize=6, 
                 label='2025 Actual', zorder=10)
         
-        # Add forecast
         forecast_data = daily_data[daily_data['Forecast Level'].notna()].tail(1)
         if not forecast_data.empty:
             try:
@@ -239,14 +230,12 @@ def create_lake_chart():
             except:
                 pass
         
-        # Reference lines
         ax.axhline(y=1752, color='red', linestyle=':', linewidth=2, alpha=0.7, 
                    label='Flood Level (1752 ft)')
         ax.axhline(y=1754.24, color='darkred', linestyle='--', linewidth=1.5, alpha=0.6,
                    label='Record High (1754.24 ft)')
         ax.axhspan(1740, 1750, alpha=0.08, color='gray', label='Historical Range', zorder=1)
         
-        # Formatting
         ax.set_title('Kootenay Lake Levels - Queens Bay', fontsize=16, fontweight='bold', pad=15)
         ax.set_xlabel('Date', fontsize=11, fontweight='bold')
         ax.set_ylabel('Elevation (feet)', fontsize=11, fontweight='bold')
@@ -264,7 +253,7 @@ def create_lake_chart():
         
         plt.tight_layout()
         
-        # Save to public directory
+        # CRITICAL: Save to public directory (where Netlify deploys from)
         os.makedirs('public', exist_ok=True)
         plt.savefig('public/lake_chart.png', dpi=150, bbox_inches='tight', facecolor='white')
         plt.close()
@@ -279,7 +268,7 @@ def create_lake_chart():
         return False
 
 # ============================================================================
-# WEATHER FUNCTIONS
+# WEATHER & HTML FUNCTIONS
 # ============================================================================
 
 def get_weather_data():
@@ -299,11 +288,16 @@ def get_weather_data():
         raise
 
 def generate_index_html(weather_data, lake_data=None):
-    """Generate the index.html file with weather and lake data"""
-    print("\n[HTML] Generating index.html...")
+    """Generate index.html in public directory (for Netlify)"""
+    print("\n[HTML] Generating public/index.html...")
     
-    # Read the template
-    with open('public/index.html', 'r', encoding='utf-8') as f:
+    # Read the template from public/index.html
+    template_path = 'public/index.html'
+    if not os.path.exists(template_path):
+        print(f"  ✗ Template not found at {template_path}")
+        return
+    
+    with open(template_path, 'r', encoding='utf-8') as f:
         html_content = f.read()
     
     # Add lake level section before </body> tag if lake data exists
@@ -365,18 +359,16 @@ def generate_index_html(weather_data, lake_data=None):
     </div>
 """
         
-        # Insert before </body>
         if '</body>' in html_content:
             html_content = html_content.replace('</body>', f'{lake_section}\n</body>')
         else:
-            # If no </body> tag, append at end
             html_content += lake_section
     
-    # Write the updated HTML
-    with open('index.html', 'w', encoding='utf-8') as f:
+    # Write back to public/index.html (Netlify will deploy this)
+    with open('public/index.html', 'w', encoding='utf-8') as f:
         f.write(html_content)
     
-    print("  ✓ index.html generated successfully")
+    print("  ✓ public/index.html updated successfully")
 
 # ============================================================================
 # MAIN EXECUTION
@@ -384,7 +376,7 @@ def generate_index_html(weather_data, lake_data=None):
 
 def main():
     print("=" * 70)
-    print("BIRCHDALE WEATHER & LAKE MONITOR")
+    print("BIRCHDALE WEATHER & LAKE MONITOR (NETLIFY)")
     print("=" * 70)
     
     try:
@@ -404,14 +396,15 @@ def main():
             except Exception as e:
                 print(f"  ⚠ Could not write to Google Sheets: {e}")
         
-        # Generate chart
+        # Generate chart (saves to public/)
         create_lake_chart()
         
-        # Generate HTML
+        # Generate HTML (updates public/index.html directly)
         generate_index_html(weather_data, lake_data)
         
         print("\n" + "=" * 70)
         print("✓ ALL TASKS COMPLETED SUCCESSFULLY")
+        print("✓ Files ready in public/ directory for Netlify deployment")
         print("=" * 70)
         
     except Exception as e:
