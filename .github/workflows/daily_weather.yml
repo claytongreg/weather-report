@@ -20,6 +20,8 @@ jobs:
       TWILIO_TOKEN: ${{ secrets.TWILIO_TOKEN }}
       TWILIO_PHONE: ${{ secrets.TWILIO_PHONE }}
       OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
+      LAKE_SPREADSHEET_ID: ${{ secrets.LAKE_SPREADSHEET_ID }}
+      GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
     
     steps:
       - name: Checkout repository
@@ -35,7 +37,13 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests twilio pytz beautifulsoup4 pandas matplotlib
+          pip install requests twilio pytz beautifulsoup4 pandas matplotlib google-auth google-auth-oauthlib google-api-python-client
+      
+      - name: Setup Google Credentials
+        run: |
+          # Decode base64 credentials and save to file
+          echo "$GOOGLE_CREDENTIALS_JSON" | base64 -d > credentials.json
+          echo "✓ Google credentials file created"
       
       - name: Run weather & lake monitoring script
         run: python main.py
@@ -56,22 +64,18 @@ jobs:
           else
             echo "⚠ Warning: Lake chart not generated (may need more data)"
           fi
-          
-          if [ -f lake_data_history.csv ]; then
-            echo "✓ Lake history CSV exists"
-            echo "Data points:"
-            wc -l lake_data_history.csv
-          fi
       
       - name: Commit and push updates
         run: |
           git config --local user.name "Weather & Lake Bot"
           git config --local user.email "weather-bot@github-actions"
           
+          # Remove credentials file before committing
+          rm -f credentials.json
+          
           # Add all generated files
           git add index.html weather_report.html
           git add public/lake_chart.png 2>/dev/null || true
-          git add lake_data_history.csv 2>/dev/null || true
           
           # Check if there are changes to commit
           if git diff --staged --quiet; then
@@ -79,7 +83,7 @@ jobs:
           else
             git commit -m "Update weather & lake data - $(date +'%Y-%m-%d %I:%M %p PST') [skip ci]"
             git push
-            echo "✓ Weather & lake data pushed to GitHub Pages"
+            echo "✓ Weather & lake data pushed to repository"
           fi
       
       - name: Deployment status
@@ -87,10 +91,11 @@ jobs:
         run: |
           echo "========================================="
           echo "✓ Workflow completed successfully!"
-          echo "✓ Email sent to recipients"
-          echo "✓ GitHub Pages updated"
-          echo "✓ Lake level data collected"
-          echo "✓ Site available at: https://claytongreg.github.io/weather-report/"
+          echo "✓ Lake data written to Google Sheets"
+          echo "✓ Chart generated from historical data"
+          echo "✓ Files pushed to repository"
+          echo "✓ Netlify will auto-deploy updates"
+          echo "✓ Site: https://birchdale-weather.netlify.app/"
           echo "========================================="
       
       - name: Notify on failure
