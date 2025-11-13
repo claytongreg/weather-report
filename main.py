@@ -322,6 +322,25 @@ def generate_index_html(weather_data, lake_data=None):
     
     print(f"  ✓ Read template ({len(html_content)} characters)")
     
+    # CRITICAL: Remove any existing lake sections first (prevents duplicates)
+    import re
+    
+    # Remove any existing lake section (everything from lake comment to its closing div)
+    lake_pattern = r'<!-- KOOTENAY LAKE LEVELS SECTION -->.*?</div>\s*</div>\s*</div>'
+    html_content = re.sub(lake_pattern, '', html_content, flags=re.DOTALL)
+    
+    # Also remove any orphaned divs between </script> and </body>
+    script_end = html_content.rfind('</script>')
+    body_start = html_content.rfind('</body>')
+    
+    if script_end > 0 and body_start > script_end:
+        between_content = html_content[script_end + 9:body_start]
+        # Clean up any stray divs, keeping only whitespace
+        cleaned_between = re.sub(r'</div>\s*', '', between_content)
+        html_content = html_content[:script_end + 9] + cleaned_between + html_content[body_start:]
+    
+    print("  ✓ Cleaned up any existing lake sections")
+    
     # Add lake level section AFTER the seven-day forecast section (not before </body>)
     if lake_data:
         print(f"  ✓ Lake data available: Queen's Bay = {lake_data.get('queens_ft', 'N/A')} ft")
