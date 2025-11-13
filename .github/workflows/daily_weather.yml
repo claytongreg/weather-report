@@ -50,11 +50,11 @@ jobs:
       
       - name: Check if files were generated
         run: |
-          if [ -f index.html ]; then
-            echo "✓ index.html generated successfully"
-            ls -lh index.html
+          if [ -f public/index.html ]; then
+            echo "✓ public/index.html generated successfully"
+            ls -lh public/index.html
           else
-            echo "✗ ERROR: index.html was not generated!"
+            echo "✗ ERROR: public/index.html was not generated!"
             exit 1
           fi
           
@@ -73,8 +73,8 @@ jobs:
           # Remove credentials file before committing
           rm -f credentials.json
           
-          # Add all generated files
-          git add index.html weather_report.html
+          # CRITICAL: Add the files that Netlify will deploy
+          git add public/index.html
           git add public/lake_chart.png 2>/dev/null || true
           
           # Check if there are changes to commit
@@ -84,6 +84,7 @@ jobs:
             git commit -m "Update weather & lake data - $(date +'%Y-%m-%d %I:%M %p PST') [skip ci]"
             git push
             echo "✓ Weather & lake data pushed to repository"
+            echo "✓ Netlify will auto-deploy from public/ directory"
           fi
       
       - name: Deployment status
@@ -93,7 +94,7 @@ jobs:
           echo "✓ Workflow completed successfully!"
           echo "✓ Lake data written to Google Sheets"
           echo "✓ Chart generated from historical data"
-          echo "✓ Files pushed to repository"
+          echo "✓ Files pushed to public/ directory"
           echo "✓ Netlify will auto-deploy updates"
           echo "✓ Site: https://birchdale-weather.netlify.app/"
           echo "========================================="
