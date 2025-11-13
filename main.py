@@ -1,488 +1,378 @@
+#!/usr/bin/env python3
+"""
+Birchdale Weather Report - Enhanced with Kootenay Lake Levels
+Fetches weather data, lake levels, generates report, and updates index.html
+"""
+import os
 import requests
-from datetime import datetime, timezone
+from datetime import datetime
 import pytz
-import math
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-import os
+from twilio.rest import Client
+import re
+from bs4 import BeautifulSoup
+import pandas as pd
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend for GitHub Actions
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 
-EMAIL_FROM = os.getenv("EMAIL_FROM")
-EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
-EMAIL_TO = os.getenv("EMAIL_TO", "").split(", ")
-TWILIO_SID = os.getenv("TWILIO_SID")
-TWILIO_TOKEN = os.getenv("TWILIO_TOKEN")
-TWILIO_PHONE = os.getenv("TWILIO_PHONE")
-
-# ========================================
-# CONFIGURATION
-# ========================================
+# Configuration
 LAT = 50.038417
 LON = -116.892033
-OPENWEATHER_URL = "https://api.openweathermap.org/data/3.0/onecall"
-MS_TO_KMH = 3.6
-ICON_BASE = "https://openweathermap.org/img/wn"
+OPENWEATHER_API_KEY = os.environ.get('OPENWEATHER_API_KEY')
 
-pacific = pytz.timezone('America/Los_Angeles')
-current_time = datetime.now(pacific)
+# ============================================================================
+# LAKE LEVEL FUNCTIONS
+# ============================================================================
 
-# ========================================
-# HELPER FUNCTIONS
-# ========================================
-def convert_to_pst(ts):
-    return datetime.fromtimestamp(ts, tz=timezone.utc).astimezone(pacific)
-
-def get_cardinal(deg):
-    if deg is None: return "—"
-    dirs = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
-            'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW']
-    return dirs[int((deg + 11.25) / 22.5) % 16]
-
-def get_quote():
+def scrape_lake_data():
+    """Scrape current lake data from FortisBC"""
+    print("\n[LAKE] Fetching Kootenay Lake data...")
+    
+    url = 'https://secure.fortisbc.com/lakelevel/lakes.jsp'
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+    
     try:
-        r = requests.get("https://zenquotes.io/api/random", timeout=5)
-        if r.status_code == 200:
-            q = r.json()[0]
-            return f'"{q["q"]}" — {q["a"]}'
-    except: pass
-    return '"Every day is a new beginning." — Unknown'
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        soup = BeautifulSoup(response.text, 'html.parser')
+        text = soup.get_text()
+        
+        # Parse data
+        queens_match = re.search(r"Queen['\u2019]s\s*Bay:?\s*(\d+\.\d+)\s*feet\s*\((\d+\.\d+)\s*meters\)\s*as of\s*([^\n]+)", text, re.IGNORECASE)
+        nelson_match = re.search(r"Nelson:?\s*(\d+\.\d+)\s*feet\s*\((\d+\.\d+)\s*meters\)\s*as of\s*([^\n]+)", text, re.IGNORECASE)
+        forecast_match = re.search(r"Lake level forecast[^:]*:[\s\n]*Kootenay Lake is forecast to\s+(\w+)\s+to\s+(\d+\.\d+)\s+at\s+(Queens?\s*Bay|Nelson)\s+by\s+([^\n\.]+)", text, re.IGNORECASE | re.DOTALL)
+        discharge_match = re.search(r"Average Daily Kootenay River Discharge at ([^f]+?)\s+for\s+([^:]+):\s*(\d+)\s*cfs", text, re.IGNORECASE)
+        
+        lake_data = {}
+        
+        if queens_match:
+            lake_data['queens_ft'] = queens_match.group(1)
+            lake_data['queens_m'] = queens_match.group(2)
+            lake_data['queens_updated'] = queens_match.group(3).strip()
+            print(f"  ✓ Queen's Bay: {queens_match.group(1)} ft ({queens_match.group(2)} m)")
+        
+        if nelson_match:
+            lake_data['nelson_ft'] = nelson_match.group(1)
+            lake_data['nelson_m'] = nelson_match.group(2)
+            lake_data['nelson_updated'] = nelson_match.group(3).strip()
+            print(f"  ✓ Nelson: {nelson_match.group(1)} ft ({nelson_match.group(2)} m)")
+        
+        if forecast_match:
+            lake_data['forecast_trend'] = forecast_match.group(1).strip()
+            lake_data['forecast_level'] = forecast_match.group(2).strip()
+            lake_data['forecast_location'] = forecast_match.group(3).strip()
+            lake_data['forecast_date'] = forecast_match.group(4).strip()
+            print(f"  ✓ Forecast: {forecast_match.group(2)} ft by {forecast_match.group(4)}")
+        
+        if discharge_match:
+            lake_data['discharge_cfs'] = discharge_match.group(3).strip()
+            lake_data['discharge_location'] = discharge_match.group(1).strip()
+            lake_data['discharge_date'] = discharge_match.group(2).strip()
+            print(f"  ✓ Discharge: {discharge_match.group(3)} cfs")
+        
+        return lake_data
+        
+    except Exception as e:
+        print(f"  ✗ Error fetching lake data: {e}")
+        return None
 
-# ========================================
-# FETCH DATA
-# ========================================
-print("Fetching weather from OpenWeather One Call 3.0...")
-params = {
-    "lat": LAT,
-    "lon": LON,
-    "appid": os.getenv("OPENWEATHER_API_KEY"),
-    "units": "metric",
-    "exclude": "minutely,alerts"
-}
-resp = requests.get(OPENWEATHER_URL, params=params, timeout=15)
-resp.raise_for_status()
-data = resp.json()
+def create_lake_chart(lake_data_history):
+    """Generate Kootenay Lake chart"""
+    print("\n[CHART] Generating lake level chart...")
+    
+    try:
+        if not lake_data_history or len(lake_data_history) < 2:
+            print("  ⚠ Not enough historical data for chart yet")
+            return False
+        
+        # Convert to DataFrame
+        df = pd.DataFrame(lake_data_history)
+        df['date'] = pd.to_datetime(df['date'])
+        df['level'] = pd.to_numeric(df['level'], errors='coerce')
+        df = df.dropna(subset=['level'])
+        
+        if len(df) < 2:
+            print("  ⚠ Not enough valid data points")
+            return False
+        
+        # Create figure
+        fig, ax = plt.subplots(figsize=(12, 6))
+        
+        # Plot data
+        ax.plot(df['date'], df['level'], 
+                color='#e74c3c', linewidth=3, marker='o', markersize=6, 
+                label='2025 Actual', zorder=10)
+        
+        # Add forecast if available
+        if 'forecast_level' in df.columns and 'forecast_date' in df.columns:
+            forecast_data = df[df['forecast_level'].notna()].tail(1)
+            if not forecast_data.empty:
+                try:
+                    forecast_level = float(forecast_data['forecast_level'].iloc[0])
+                    forecast_date = pd.to_datetime(forecast_data['forecast_date'].iloc[0])
+                    last_date = df['date'].iloc[-1]
+                    last_level = df['level'].iloc[-1]
+                    
+                    ax.plot([last_date, forecast_date], [last_level, forecast_level],
+                           'k--', linewidth=2, zorder=9, label='Forecast')
+                    ax.plot([last_date, forecast_date], [last_level, forecast_level],
+                           'k^', markersize=8, zorder=9)
+                except:
+                    pass
+        
+        # Reference lines
+        ax.axhline(y=1752, color='red', linestyle=':', linewidth=2, alpha=0.7, 
+                   label='Flood Level (1752 ft)')
+        ax.axhline(y=1754.24, color='darkred', linestyle='--', linewidth=1.5, alpha=0.6,
+                   label='Record High (1754.24 ft)')
+        ax.axhspan(1740, 1750, alpha=0.08, color='gray', label='Historical Range', zorder=1)
+        
+        # Formatting
+        ax.set_title('Kootenay Lake Levels - Queens Bay', fontsize=16, fontweight='bold', pad=20)
+        ax.set_xlabel('Date', fontsize=12, fontweight='bold')
+        ax.set_ylabel('Elevation (feet)', fontsize=12, fontweight='bold')
+        ax.grid(True, alpha=0.3, linestyle='-', linewidth=0.5)
+        ax.set_axisbelow(True)
+        
+        current_level = df['level'].iloc[-1]
+        ax.set_ylim(max(1737, current_level - 8), min(1755, current_level + 8))
+        
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %d'))
+        plt.xticks(rotation=45, ha='right')
+        ax.legend(loc='upper left', fontsize=9, framealpha=0.9)
+        
+        plt.tight_layout()
+        
+        # Save to public directory
+        os.makedirs('public', exist_ok=True)
+        plt.savefig('public/lake_chart.png', dpi=150, bbox_inches='tight', facecolor='white')
+        plt.close()
+        
+        print("  ✓ Chart saved to public/lake_chart.png")
+        return True
+        
+    except Exception as e:
+        print(f"  ✗ Error creating chart: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
-# Current
-current = data['current']
-current_temp = current['temp']
-current_humidity = current['humidity']
-current_pressure = current['pressure']  # hPa
-current_desc = current['weather'][0]['description'].title()
-wind_speed_kmh = current['wind_speed'] * MS_TO_KMH
-wind_deg = current.get('wind_deg')
-wind_gust_kmh = current.get('wind_gust', 0) * MS_TO_KMH
-current_cardinal = get_cardinal(wind_deg)
+def load_lake_history():
+    """Load historical lake data from CSV file"""
+    csv_file = 'lake_data_history.csv'
+    
+    if os.path.exists(csv_file):
+        try:
+            df = pd.read_csv(csv_file)
+            return df.to_dict('records')
+        except:
+            return []
+    return []
 
-# Today
-today = data['daily'][0]
-high_temp = today['temp']['max']
-low_temp = today['temp']['min']
-rain_today = today.get('rain', 0)
-snow_today = today.get('snow', 0)
-total_precip = rain_today + snow_today
+def save_lake_history(history, new_data):
+    """Append new lake data to history CSV"""
+    csv_file = 'lake_data_history.csv'
+    
+    timestamp = datetime.now().strftime('%Y-%m-%d')
+    
+    # Create new entry
+    new_entry = {
+        'date': timestamp,
+        'level': new_data.get('queens_ft', ''),
+        'level_m': new_data.get('queens_m', ''),
+        'forecast_level': new_data.get('forecast_level', ''),
+        'forecast_date': new_data.get('forecast_date', ''),
+        'discharge': new_data.get('discharge_cfs', '')
+    }
+    
+    # Check if today's data already exists
+    history = [h for h in history if h.get('date') != timestamp]
+    history.append(new_entry)
+    
+    # Save to CSV
+    df = pd.DataFrame(history)
+    df.to_csv(csv_file, index=False)
+    print(f"  ✓ Lake history updated ({len(history)} days)")
 
-# Sunrise / Sunset
-sunrise_time = convert_to_pst(today['sunrise']).strftime("%I:%M %p")
-sunset_time = convert_to_pst(today['sunset']).strftime("%I:%M %p")
+# ============================================================================
+# WEATHER FUNCTIONS (keep your existing ones)
+# ============================================================================
 
-# 24-Hour Forecast
-hourly_24 = []
-for h in data['hourly']:
-    dt = convert_to_pst(h['dt'])
-    if (dt - current_time).total_seconds() / 3600 > 24:
-        break
-    hourly_24.append({
-        'time': dt,
-        'temp': h['temp'],
-        'cond': h['weather'][0]['main'],
-        'wind_kmh': h['wind_speed'] * MS_TO_KMH,
-        'gust_kmh': h.get('wind_gust', 0) * MS_TO_KMH,
-        'dir': get_cardinal(h.get('wind_deg')),
-        'icon': h['weather'][0]['icon']
-    })
+def get_weather_data():
+    """Fetch weather data from OpenWeather API"""
+    print("\n[WEATHER] Fetching weather data...")
+    
+    url = f"https://api.openweathermap.org/data/3.0/onecall?lat={LAT}&lon={LON}&appid={OPENWEATHER_API_KEY}&units=metric&exclude=minutely,alerts"
+    
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        print("  ✓ Weather data fetched successfully")
+        return data
+    except Exception as e:
+        print(f"  ✗ Error fetching weather: {e}")
+        raise
 
-current_wind = hourly_24[0] if hourly_24 else None
-peak_wind = max(hourly_24, key=lambda x: x['wind_kmh']) if hourly_24 else None
+def format_weather_report(weather_data, lake_data=None):
+    """Format weather data into readable report"""
+    current = weather_data['current']
+    daily = weather_data['daily'][0]
+    
+    pst = pytz.timezone('America/Los_Angeles')
+    now = datetime.now(pst)
+    
+    temp = current['temp']
+    feels_like = current['feels_like']
+    desc = current['weather'][0]['description']
+    wind_speed = current['wind_speed'] * 3.6  # m/s to km/h
+    humidity = current['humidity']
+    
+    report = f"""
+🌤️ BIRCHDALE WEATHER REPORT
+{now.strftime('%A, %B %d, %Y - %I:%M %p PST')}
 
-# Wind changes
-wind_changes = []
-for i in range(1, len(hourly_24)):
-    diff = hourly_24[i]['wind_kmh'] - hourly_24[i-1]['wind_kmh']
-    if abs(diff) >= 2.5:
-        wind_changes.append({
-            'time': hourly_24[i]['time'],
-            'change': diff,
-            'from': hourly_24[i-1]['wind_kmh'],
-            'to': hourly_24[i]['wind_kmh'],
-            'dir': hourly_24[i]['dir']
-        })
+Current Conditions:
+Temperature: {temp:.1f}°C (Feels like {feels_like:.1f}°C)
+Conditions: {desc.title()}
+Wind: {wind_speed:.1f} km/h
+Humidity: {humidity}%
+High: {daily['temp']['max']:.0f}°C / Low: {daily['temp']['min']:.0f}°C
+"""
+    
+    # Add lake data if available
+    if lake_data:
+        report += f"""
+🌊 KOOTENAY LAKE LEVELS:
+Queen's Bay: {lake_data.get('queens_ft', 'N/A')} feet ({lake_data.get('queens_m', 'N/A')} meters)
+"""
+        if 'forecast_level' in lake_data:
+            report += f"Forecast: {lake_data['forecast_level']} ft by {lake_data.get('forecast_date', 'N/A')}\n"
+    
+    return report
 
-# 7-Day Forecast
-seven_day = data['daily'][1:8]
-
-# ========================================
-# BUILD HTML EMAIL
-# ========================================
-quote = get_quote()
-
-email_html = f"""<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <style>
-        body {{font-family: 'Segoe UI', sans-serif; line-height: 1.6; color: #333; max-width: 900px; margin: 0 auto; background: #f5f5f5; padding: 15px;}}
-        .container {{background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); overflow: hidden;}}
-        .header {{background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px 20px; text-align: center;}}
-        .header h1 {{margin: 0; font-size: 28px; font-weight: 700;}}
-        .header p {{margin: 8px 0 0; font-size: 14px; opacity: 0.95;}}
-        .section {{padding: 20px; border-bottom: 1px solid #eee;}}
-        .section:last-child {{border-bottom: none;}}
-        .section h2 {{color: #667eea; font-size: 18px; margin: 0 0 15px; font-weight: 600; border-bottom: 2px solid #667eea; padding-bottom: 6px;}}
-
-        /* METRIC CARDS */
-        .current-grid, .forecast-grid {{display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between;}}
-        .metric {{flex: 1; min-width: 120px; background: #f8f9fa; padding: 12px; border-radius: 8px; border-left: 4px solid #667eea; text-align: center;}}
-        .metric-label {{font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;}}
-        .metric-value {{font-size: 20px; font-weight: 700; color: #333;}}
-
-        .wind-peak {{background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; border-radius: 8px; margin: 12px 0; font-weight: 500; font-size: 14px;}}
-        .wind-change {{background: #f8f9fa; padding: 10px; border-radius: 6px; margin: 8px 0; border-left: 3px solid #28a745; font-size: 13px;}}
-        .wind-change.decrease {{border-left-color: #17a2b8;}}
-        .wind-change-time {{font-weight: 600; color: #667eea;}}
-
-        .scroll-table {{max-height: 400px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; margin: 12px 0;}}
-        .combined-hourly {{width: 100%; border-collapse: collapse; font-size: 12px;}}
-        .combined-hourly th {{background: #667eea; color: white; padding: 8px; text-align: left; font-weight: 600;}}
-        .combined-hourly td {{padding: 6px 8px; border-bottom: 1px solid #eee;}}
-        .combined-hourly tr:hover {{background: #f8f9fa;}}
-        .hour-time {{font-weight: 600; color: #667eea;}}
-        .temp-cell {{font-weight: 600;}}
-        .wind-cell {{color: #667eea; font-weight: 500;}}
-
-        /* 7-DAY: HORIZONTAL SCROLL */
-        .seven-day-container {{overflow-x: auto; white-space: nowrap; padding: 10px 0;}}
-        .seven-day {{display: inline-flex; gap: 12px;}}
-        .day-card {{background: #f8f9fa; border-radius: 10px; padding: 12px; min-width: 120px; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,0.05);}}
-        .day-date {{font-weight: 600; color: #667eea; font-size: 13px;}}
-        .day-icon {{width: 40px; height: 40px; margin: 6px auto;}}
-        .day-temps {{font-size: 16px; font-weight: 600; margin: 6px 0;}}
-        .day-high {{color: #d35400;}}
-        .day-low {{color: #2980b9;}}
-        .day-wind {{font-size: 12px; color: #555;}}
-        .day-precip {{font-size: 11px; color: #27ae60; margin-top: 4px;}}
-
-        .footer {{text-align: center; padding: 20px; color: #777; font-size: 13px; background: #f8f9fa;}}
-        .quote-box {{background: rgba(255,255,255,0.3); backdrop-filter: blur(10px); border-radius: 10px; padding: 15px 20px; margin-top: 15px; font-style: italic; border-left: 4px solid rgba(255,255,255,0.9);}}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <!-- HEADER -->
-        <div class="header">
-            <h1>Birchdale Weather Report</h1>
-            <p>{current_time.strftime('%A, %B %d, %Y • %I:%M %p PST')}</p>
-            <div class="quote-box">{quote}</div>
-        </div>
-
-        <!-- CURRENT CONDITIONS -->
-        <div class="section">
-            <h2>Current Conditions</h2>
-            <div class="current-grid">
-                <div class="metric"><div class="metric-label">Temperature</div><div class="metric-value">{current_temp:.1f}°C</div></div>
-                <div class="metric"><div class="metric-label">Conditions</div><div class="metric-value">{current_desc}</div></div>
-                <div class="metric"><div class="metric-label">Humidity</div><div class="metric-value">{current_humidity}%</div></div>
-                <div class="metric"><div class="metric-label">Pressure</div><div class="metric-value">{current_pressure} hPa</div></div>
-                <div class="metric"><div class="metric-label">Wind</div><div class="metric-value">{wind_speed_kmh:.1f} km/h</div></div>
-                <div class="metric"><div class="metric-label">Direction</div><div class="metric-value">{current_cardinal}</div></div>
-            </div>
-        </div>
-
-                <!-- TODAY'S FORECAST -->
-        <div class="section">
-            <h2>Today's Forecast</h2>
-            <div class="forecast-grid">
-                <div class="metric"><div class="metric-label">High</div><div class="metric-value">{high_temp:.1f}°C</div></div>
-                <div class="metric"><div class="metric-label">Low</div><div class="metric-value">{low_temp:.1f}°C</div></div>
-                <div class="metric"><div class="metric-label">Precipitation</div><div class="metric-value">
-                    """
-if total_precip > 0:
-    email_html += f"{total_precip:.1f} mm"
-    if snow_today > 0:
-        email_html += f" (incl. {snow_today:.1f} mm snow)"
-else:
-    email_html += "None expected"
-email_html += f"""
-                </div></div>
-                <div class="metric"><div class="metric-label">Sunrise</div><div class="metric-value">{sunrise_time}</div></div>
-                <div class="metric"><div class="metric-label">Sunset</div><div class="metric-value">{sunset_time}</div></div>
-            </div>
+def generate_index_html(weather_data, lake_data=None):
+    """Generate the index.html file with weather and lake data"""
+    print("\n[HTML] Generating index.html...")
+    
+    # Read the template
+    with open('public/index.html', 'r', encoding='utf-8') as f:
+        html_content = f.read()
+    
+    # Add lake level section before </body> tag if lake data exists
+    if lake_data:
+        lake_section = f"""
+    <!-- KOOTENAY LAKE LEVELS SECTION -->
+    <div class="seven-day-section" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+      <h2 class="forecast-title" style="color: white;">🌊 Kootenay Lake Levels</h2>
+      
+      <div style="background: rgba(255,255,255,0.1); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+          <div style="background: rgba(255,255,255,0.15); padding: 15px; border-radius: 8px; text-align: center;">
+            <div style="font-size: 12px; opacity: 0.9; margin-bottom: 5px;">QUEEN'S BAY</div>
+            <div style="font-size: 32px; font-weight: 700;">{lake_data.get('queens_ft', 'N/A')}</div>
+            <div style="font-size: 14px; opacity: 0.8;">feet ({lake_data.get('queens_m', 'N/A')} m)</div>
+            <div style="font-size: 11px; opacity: 0.7; margin-top: 5px;">{lake_data.get('queens_updated', '')}</div>
+          </div>
+          
+          <div style="background: rgba(255,255,255,0.15); padding: 15px; border-radius: 8px; text-align: center;">
+            <div style="font-size: 12px; opacity: 0.9; margin-bottom: 5px;">NELSON</div>
+            <div style="font-size: 32px; font-weight: 700;">{lake_data.get('nelson_ft', 'N/A')}</div>
+            <div style="font-size: 14px; opacity: 0.8;">feet ({lake_data.get('nelson_m', 'N/A')} m)</div>
+            <div style="font-size: 11px; opacity: 0.7; margin-top: 5px;">{lake_data.get('nelson_updated', '')}</div>
+          </div>
+"""
+        
+        if 'forecast_level' in lake_data and lake_data.get('forecast_level'):
+            lake_section += f"""
+          <div style="background: rgba(255,255,255,0.15); padding: 15px; border-radius: 8px; text-align: center;">
+            <div style="font-size: 12px; opacity: 0.9; margin-bottom: 5px;">FORECAST</div>
+            <div style="font-size: 32px; font-weight: 700;">{lake_data['forecast_level']}</div>
+            <div style="font-size: 14px; opacity: 0.8;">feet</div>
+            <div style="font-size: 11px; opacity: 0.7; margin-top: 5px;">{lake_data.get('forecast_trend', '').title()} by {lake_data.get('forecast_date', '')}</div>
+          </div>
+"""
+        
+        if 'discharge_cfs' in lake_data and lake_data.get('discharge_cfs'):
+            lake_section += f"""
+          <div style="background: rgba(255,255,255,0.15); padding: 15px; border-radius: 8px; text-align: center;">
+            <div style="font-size: 12px; opacity: 0.9; margin-bottom: 5px;">DISCHARGE</div>
+            <div style="font-size: 32px; font-weight: 700;">{lake_data['discharge_cfs']}</div>
+            <div style="font-size: 14px; opacity: 0.8;">cfs</div>
+            <div style="font-size: 11px; opacity: 0.7; margin-top: 5px;">{lake_data.get('discharge_location', '')} - {lake_data.get('discharge_date', '')}</div>
+          </div>
+"""
+        
+        lake_section += """
         </div>
         
-        <!-- WIND -->
-        <div class="section">
-            <h2>Wind (Next 24 Hours)</h2>
-            """
-if peak_wind:
-    email_html += f'<div class="wind-peak">Peak: {peak_wind["wind_kmh"]:.1f} km/h {peak_wind["dir"]} at {peak_wind["time"].strftime("%I:%M %p")}</div>'
-
-if wind_changes:
-    email_html += f"<p><strong>{len(wind_changes)} change(s):</strong></p>"
-    for c in wind_changes:
-        t = c['time'].strftime("%I:%M %p")
-        note = " <span style='color:#999;'>(tonight)</span>" if (c['time'] - current_time).total_seconds()/3600 > 12 else ""
-        sign = "+" if c['change'] > 0 else "-"
-        cls = "wind-change" if c['change'] > 0 else "wind-change decrease"
-        email_html += f'<div class="{cls}"><span class="wind-change-time">{t}:</span> {sign}{abs(c["change"]):.1f} km/h{note}<br>{c["from"]:.1f} to {c["to"]:.1f} km/h from {c["dir"]}</div>'
-else:
-    email_html += '<div style="background:#f8f9fa;padding:14px;border-radius:8px;"><p>No major changes.</p>'
-    if current_wind: email_html += f"<p>Steady ~{current_wind['wind_kmh']:.1f} km/h</p>"
-    email_html += "</div>"
-email_html += """</div>
-
-        <!-- 24-HOUR TABLE -->
-        <div class="section">
-            <h2>24-Hour Forecast</h2>
-            <div class="scroll-table">
-                <table class="combined-hourly">
-                    <thead><tr><th>Time</th><th>Temp</th><th>Cond</th><th>Wind km/h</th><th>Gust km/h</th><th>Dir</th></tr></thead>
-                    <tbody>"""
-for h in hourly_24:
-    email_html += f'<tr><td class="hour-time">{h["time"].strftime("%I:%M %p")}</td><td class="temp-cell">{h["temp"]:.1f}°C</td><td>{h["cond"]}</td><td class="wind-cell">{h["wind_kmh"]:.1f}</td><td class="wind-cell">{h["gust_kmh"]:.1f}</td><td class="wind-cell">{h["dir"]}</td></tr>'
-email_html += """</tbody></table></div>
+        <!-- Lake Chart -->
+        <div style="background: white; border-radius: 12px; padding: 15px; margin-top: 20px;">
+          <img src="lake_chart.png" alt="Kootenay Lake Level Chart" style="width: 100%; height: auto; border-radius: 8px;">
         </div>
-
-        <!-- 7-DAY: HORIZONTAL SCROLL -->
-        <div class="section">
-            <h2>7-Day Forecast</h2>
-            <div class="seven-day-container">
-                <div class="seven-day">"""
-for day in seven_day:
-    dt = convert_to_pst(day['dt'])
-    high = day['temp']['max']
-    low = day['temp']['min']
-    wind = day['wind_speed'] * MS_TO_KMH
-    dir = get_cardinal(day.get('wind_deg'))
-    icon = day['weather'][0]['icon']
-    cond = day['weather'][0]['description'].title()
-    precip = day.get('rain', 0) + day.get('snow', 0)
-    email_html += f"""
-                    <div class="day-card">
-                        <div class="day-date">{dt.strftime('%a %b %d')}</div>
-                        <img src="{ICON_BASE}/{icon}@2x.png" class="day-icon" alt="{cond}">
-                        <div class="day-temps">
-                            <span class="day-high">{high:.0f}°</span> / <span class="day-low">{low:.0f}°</span>
-                        </div>
-                        <div class="day-wind">{wind:.0f} km/h {dir}</div>"""
-    if precip > 0:
-        email_html += f'<div class="day-precip">Precip: {precip:.1f} mm</div>'
-    email_html += f"<div style='font-size:10px; color:#777; margin-top:3px;'>{cond}</div></div>"
-email_html += """</div>
-            </div>
-        </div>
-
-        <!-- FOOTER -->
-        <div class="footer">
-            <p><strong>Have a great day!</strong></p>
-            <p style="font-size:11px;color:#999;margin-top:8px;">Automated 24-hour report for Birchdale</p>
-            <p style="font-size:11px;color:#999;margin-top:8px;">Reply to this email to be removed from it</p>
-        </div>
-    </div>
-</body>
-</html>"""
-
-# ========================================
-# SEND EMAIL
-# ========================================
-print("Sending email...")
-msg = MIMEMultipart('alternative')
-msg['From'] = EMAIL_FROM
-msg['To'] = ', '.join([e.strip() for e in EMAIL_TO])
-msg['Subject'] = f"Birchdale Weather • {current_time.strftime('%B %d, %Y')}"
-
-msg.attach(MIMEText(email_html, 'html'))
-
-try:
-    with smtplib.SMTP('smtp.gmail.com', 587) as server:
-        server.starttls()
-        server.login(EMAIL_FROM, EMAIL_PASSWORD)
-        server.send_message(msg)
-    print("Email sent successfully!")
-except Exception as e:
-    print(f"Email failed: {e}")
-
-# ========================================
-# GENERATE STATIC index.html (NO API KEY NEEDED)
-# ========================================
-print("Generating static index.html for GitHub Pages...")
-
-# Create a simple, static weather display page
-index_html = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Birchdale Weather Report</title>
-  <style>
-    * {{
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }}
-    body {{
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      padding: 20px;
-    }}
-    .container {{
-      background: white;
-      border-radius: 20px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-      max-width: 500px;
-      width: 100%;
-      overflow: hidden;
-    }}
-    .header {{
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      padding: 30px;
-      text-align: center;
-    }}
-    .header h1 {{
-      font-size: 32px;
-      margin-bottom: 10px;
-    }}
-    .header p {{
-      opacity: 0.9;
-      font-size: 14px;
-    }}
-    .current-weather {{
-      padding: 40px 30px;
-      text-align: center;
-    }}
-    .temperature {{
-      font-size: 72px;
-      font-weight: 700;
-      color: #667eea;
-      margin: 20px 0;
-    }}
-    .description {{
-      font-size: 24px;
-      color: #555;
-      margin-bottom: 30px;
-      text-transform: capitalize;
-    }}
-    .details {{
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 20px;
-      margin-top: 30px;
-    }}
-    .detail-item {{
-      background: #f8f9fa;
-      padding: 15px;
-      border-radius: 10px;
-      border-left: 4px solid #667eea;
-    }}
-    .detail-label {{
-      font-size: 12px;
-      color: #666;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      margin-bottom: 5px;
-    }}
-    .detail-value {{
-      font-size: 20px;
-      font-weight: 600;
-      color: #333;
-    }}
-    .footer {{
-      background: #f8f9fa;
-      padding: 20px;
-      text-align: center;
-      color: #777;
-      font-size: 12px;
-    }}
-    .updated {{
-      margin-top: 10px;
-      font-style: italic;
-    }}
-    @media (max-width: 480px) {{
-      .temperature {{
-        font-size: 56px;
-      }}
-      .description {{
-        font-size: 20px;
-      }}
-      .details {{
-        grid-template-columns: 1fr;
-      }}
-    }}
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>🌤️ Birchdale Weather</h1>
-      <p>Live weather updates from the Kootenays</p>
-    </div>
-    
-    <div class="current-weather">
-      <div class="temperature">{current_temp:.1f}°C</div>
-      <div class="description">{current_desc}</div>
-      
-      <div class="details">
-        <div class="detail-item">
-          <div class="detail-label">Feels Like</div>
-          <div class="detail-value">{current.get('feels_like', current_temp):.1f}°C</div>
-        </div>
-        <div class="detail-item">
-          <div class="detail-label">Humidity</div>
-          <div class="detail-value">{current_humidity}%</div>
-        </div>
-        <div class="detail-item">
-          <div class="detail-label">Wind</div>
-          <div class="detail-value">{wind_speed_kmh:.1f} km/h</div>
-        </div>
-        <div class="detail-item">
-          <div class="detail-label">Direction</div>
-          <div class="detail-value">{current_cardinal}</div>
-        </div>
-        <div class="detail-item">
-          <div class="detail-label">High / Low</div>
-          <div class="detail-value">{high_temp:.0f}° / {low_temp:.0f}°</div>
-        </div>
-        <div class="detail-item">
-          <div class="detail-label">Pressure</div>
-          <div class="detail-value">{current_pressure} hPa</div>
+        
+        <div style="text-align: center; margin-top: 15px; font-size: 12px; opacity: 0.8;">
+          Data from FortisBC | Updated Daily
         </div>
       </div>
     </div>
+"""
+        
+        # Insert before </body>
+        html_content = html_content.replace('</body>', f'{lake_section}\n</body>')
     
-    <div class="footer">
-      <p><strong>Location:</strong> Birchdale (50.038°N, 116.892°W)</p>
-      <p class="updated">Last updated: {current_time.strftime('%B %d, %Y at %I:%M %p PST')}</p>
-      <p style="margin-top: 10px; opacity: 0.7;">Automated updates every 24 hours</p>
-    </div>
-  </div>
-</body>
-</html>"""
+    # Write the updated HTML
+    with open('index.html', 'w', encoding='utf-8') as f:
+        f.write(html_content)
+    
+    print("  ✓ index.html generated successfully")
 
-# Write the index.html file
-with open("index.html", "w", encoding="utf-8") as f:
-    f.write(index_html)
-print("✓ index.html generated successfully!")
+# ============================================================================
+# MAIN EXECUTION
+# ============================================================================
 
-# Also generate the detailed email report as a separate file
-with open("weather_report.html", "w", encoding="utf-8") as f:
-    f.write(email_html)
-print("✓ weather_report.html generated successfully!")
+def main():
+    print("=" * 70)
+    print("BIRCHDALE WEATHER & LAKE MONITOR")
+    print("=" * 70)
+    
+    try:
+        # Fetch weather data
+        weather_data = get_weather_data()
+        
+        # Fetch lake data
+        lake_data = scrape_lake_data()
+        
+        # Load and update lake history
+        if lake_data:
+            history = load_lake_history()
+            save_lake_history(history, lake_data)
+            
+            # Generate chart
+            create_lake_chart(history)
+        
+        # Generate HTML
+        generate_index_html(weather_data, lake_data)
+        
+        # Generate weather report for email/SMS
+        report = format_weather_report(weather_data, lake_data)
+        
+        # Send email/SMS (keep your existing email/SMS code here if you have it)
+        
+        print("\n" + "=" * 70)
+        print("✓ ALL TASKS COMPLETED SUCCESSFULLY")
+        print("=" * 70)
+        
+    except Exception as e:
+        print(f"\n✗ ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
 
-print("\nReport complete!")
-print("Next steps:")
-print("1. Copy index.html to your GitHub repository")
-print("2. Commit and push to GitHub")
-print("3. Your site will update at https://claytongreg.github.io/weather-report/")
+if __name__ == '__main__':
+    main()
