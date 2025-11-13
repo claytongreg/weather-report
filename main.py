@@ -331,16 +331,16 @@ def generate_index_html(weather_data, lake_data=None):
       <h2 class="forecast-title" style="color: white;">🌊 Kootenay Lake Levels</h2>
       
       <div style="background: rgba(255,255,255,0.1); border-radius: 12px; padding: 15px; margin-bottom: 20px;">
-        <!-- Data Cards - Mobile Responsive -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 15px;">
-          <div style="background: rgba(255,255,255,0.15); padding: 12px; border-radius: 8px; text-align: center;">
+        <!-- Data Cards - Horizontal Row -->
+        <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-bottom: 15px;">
+          <div style="background: rgba(255,255,255,0.15); padding: 12px; border-radius: 8px; text-align: center; min-width: 140px; flex: 0 1 auto;">
             <div style="font-size: 11px; opacity: 0.9; margin-bottom: 5px;">QUEEN'S BAY</div>
             <div style="font-size: 24px; font-weight: 700;">{lake_data.get('queens_ft', 'N/A')}</div>
             <div style="font-size: 12px; opacity: 0.8;">feet</div>
             <div style="font-size: 10px; opacity: 0.7; margin-top: 3px;">({lake_data.get('queens_m', 'N/A')} m)</div>
           </div>
           
-          <div style="background: rgba(255,255,255,0.15); padding: 12px; border-radius: 8px; text-align: center;">
+          <div style="background: rgba(255,255,255,0.15); padding: 12px; border-radius: 8px; text-align: center; min-width: 140px; flex: 0 1 auto;">
             <div style="font-size: 11px; opacity: 0.9; margin-bottom: 5px;">NELSON</div>
             <div style="font-size: 24px; font-weight: 700;">{lake_data.get('nelson_ft', 'N/A')}</div>
             <div style="font-size: 12px; opacity: 0.8;">feet</div>
@@ -350,7 +350,7 @@ def generate_index_html(weather_data, lake_data=None):
         
         if 'forecast_level' in lake_data and lake_data.get('forecast_level'):
             lake_section += f"""
-          <div style="background: rgba(255,255,255,0.15); padding: 12px; border-radius: 8px; text-align: center;">
+          <div style="background: rgba(255,255,255,0.15); padding: 12px; border-radius: 8px; text-align: center; min-width: 140px; flex: 0 1 auto;">
             <div style="font-size: 11px; opacity: 0.9; margin-bottom: 5px;">FORECAST</div>
             <div style="font-size: 24px; font-weight: 700;">{lake_data['forecast_level']}</div>
             <div style="font-size: 12px; opacity: 0.8;">feet</div>
@@ -360,7 +360,7 @@ def generate_index_html(weather_data, lake_data=None):
         
         if 'discharge_cfs' in lake_data and lake_data.get('discharge_cfs'):
             lake_section += f"""
-          <div style="background: rgba(255,255,255,0.15); padding: 12px; border-radius: 8px; text-align: center;">
+          <div style="background: rgba(255,255,255,0.15); padding: 12px; border-radius: 8px; text-align: center; min-width: 140px; flex: 0 1 auto;">
             <div style="font-size: 11px; opacity: 0.9; margin-bottom: 5px;">DISCHARGE</div>
             <div style="font-size: 24px; font-weight: 700;">{lake_data['discharge_cfs']}</div>
             <div style="font-size: 12px; opacity: 0.8;">cfs</div>
@@ -371,9 +371,9 @@ def generate_index_html(weather_data, lake_data=None):
         lake_section += """
         </div>
         
-        <!-- Lake Chart - Mobile Responsive -->
-        <div style="background: white; border-radius: 12px; padding: 10px; margin-top: 15px; overflow-x: auto;">
-          <img src="lake_chart.png" alt="Kootenay Lake Level Chart" style="width: 100%; min-width: 300px; height: auto; border-radius: 8px; display: block;">
+        <!-- Lake Chart - Full Width Below Cards -->
+        <div style="background: white; border-radius: 12px; padding: 10px; margin-top: 15px; width: 100%;">
+          <img src="lake_chart.png" alt="Kootenay Lake Level Chart" style="width: 100%; height: auto; border-radius: 8px; display: block;">
         </div>
         
         <div style="text-align: center; margin-top: 12px; font-size: 11px; opacity: 0.8;">
