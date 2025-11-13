@@ -1,28 +1,109 @@
 #!/usr/bin/env python3
 """
 Birchdale Weather Report - Enhanced with Kootenay Lake Levels
-Fetches weather data, lake levels, generates report, and updates index.html
+Fetches weather, lake data, updates Google Sheets, generates chart, and updates index.html
 """
 import os
 import requests
 from datetime import datetime
 import pytz
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from twilio.rest import Client
 import re
 from bs4 import BeautifulSoup
 import pandas as pd
 import matplotlib
-matplotlib.use('Agg')  # Use non-interactive backend for GitHub Actions
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
 
 # Configuration
 LAT = 50.038417
 LON = -116.892033
 OPENWEATHER_API_KEY = os.environ.get('OPENWEATHER_API_KEY')
+
+# Google Sheets Configuration
+SPREADSHEET_ID = os.environ.get('LAKE_SPREADSHEET_ID', '14U9YwogifuDUPS4qBXke2QN49nm9NGCOV3Cm9uQorHk')
+SHEET_NAME = 'Lake Level Data'
+CREDENTIALS_FILE = os.environ.get('GOOGLE_CREDENTIALS_FILE', 'credentials.json')
+
+# ============================================================================
+# GOOGLE SHEETS FUNCTIONS
+# ============================================================================
+
+def setup_google_sheets():
+    """Initialize Google Sheets API connection"""
+    SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+    
+    # Handle both file path and JSON string for credentials
+    if os.path.exists(CREDENTIALS_FILE):
+        creds = Credentials.from_service_account_file(CREDENTIALS_FILE, scopes=SCOPES)
+    else:
+        # If credentials are provided as environment variable (base64 encoded JSON)
+        import json
+        import base64
+        creds_json = os.environ.get('GOOGLE_CREDENTIALS_JSON')
+        if creds_json:
+            creds_dict = json.loads(base64.b64decode(creds_json))
+            creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+        else:
+            raise Exception("Google credentials not found")
+    
+    service = build('sheets', 'v4', credentials=creds)
+    return service.spreadsheets()
+
+def write_to_sheets(sheet, data_row):
+    """Append data to Google Sheets"""
+    result = sheet.values().get(
+        spreadsheetId=SPREADSHEET_ID,
+        range=f'{SHEET_NAME}!A1:N1'
+    ).execute()
+    
+    values = result.get('values', [])
+    
+    if not values:
+        header = [[
+            'Scrape Time',
+            "Queen's Bay (ft)", "Queen's Bay (m)", "Queen's Bay Updated",
+            'Nelson (ft)', 'Nelson (m)', 'Nelson Updated',
+            'Forecast Trend', 'Forecast Level', 'Forecast Location', 'Forecast Date',
+            'Discharge (cfs)', 'Discharge Location', 'Discharge Date'
+        ]]
+        sheet.values().append(
+            spreadsheetId=SPREADSHEET_ID,
+            range=f'{SHEET_NAME}!A1',
+            valueInputOption='RAW',
+            body={'values': header}
+        ).execute()
+        print("[INFO] Added header row to sheet")
+    
+    sheet.values().append(
+        spreadsheetId=SPREADSHEET_ID,
+        range=f'{SHEET_NAME}!A:N',
+        valueInputOption='RAW',
+        insertDataOption='INSERT_ROWS',
+        body={'values': [data_row]}
+    ).execute()
+
+def read_from_sheets():
+    """Read all data from Google Sheets"""
+    try:
+        sheet = setup_google_sheets()
+        result = sheet.values().get(
+            spreadsheetId=SPREADSHEET_ID,
+            range=f'{SHEET_NAME}!A:N'
+        ).execute()
+        
+        values = result.get('values', [])
+        if len(values) < 2:
+            return None
+        
+        # Convert to DataFrame
+        df = pd.DataFrame(values[1:], columns=values[0])
+        return df
+    except Exception as e:
+        print(f"[WARN] Could not read from Google Sheets: {e}")
+        return None
 
 # ============================================================================
 # LAKE LEVEL FUNCTIONS
@@ -49,81 +130,114 @@ def scrape_lake_data():
         discharge_match = re.search(r"Average Daily Kootenay River Discharge at ([^f]+?)\s+for\s+([^:]+):\s*(\d+)\s*cfs", text, re.IGNORECASE)
         
         lake_data = {}
+        data_row = [datetime.now().strftime('%Y-%m-%d %H:%M:%S')]
         
         if queens_match:
             lake_data['queens_ft'] = queens_match.group(1)
             lake_data['queens_m'] = queens_match.group(2)
             lake_data['queens_updated'] = queens_match.group(3).strip()
-            print(f"  ✓ Queen's Bay: {queens_match.group(1)} ft ({queens_match.group(2)} m)")
+            data_row.extend([queens_match.group(1), queens_match.group(2), queens_match.group(3).strip()])
+            print(f"  ✓ Queen's Bay: {queens_match.group(1)} ft")
+        else:
+            data_row.extend(['', '', ''])
         
         if nelson_match:
             lake_data['nelson_ft'] = nelson_match.group(1)
             lake_data['nelson_m'] = nelson_match.group(2)
             lake_data['nelson_updated'] = nelson_match.group(3).strip()
-            print(f"  ✓ Nelson: {nelson_match.group(1)} ft ({nelson_match.group(2)} m)")
+            data_row.extend([nelson_match.group(1), nelson_match.group(2), nelson_match.group(3).strip()])
+            print(f"  ✓ Nelson: {nelson_match.group(1)} ft")
+        else:
+            data_row.extend(['', '', ''])
         
         if forecast_match:
             lake_data['forecast_trend'] = forecast_match.group(1).strip()
             lake_data['forecast_level'] = forecast_match.group(2).strip()
             lake_data['forecast_location'] = forecast_match.group(3).strip()
             lake_data['forecast_date'] = forecast_match.group(4).strip()
-            print(f"  ✓ Forecast: {forecast_match.group(2)} ft by {forecast_match.group(4)}")
+            data_row.extend([forecast_match.group(1).strip(), forecast_match.group(2).strip(),
+                           forecast_match.group(3).strip(), forecast_match.group(4).strip()])
+            print(f"  ✓ Forecast: {forecast_match.group(2)} ft")
+        else:
+            data_row.extend(['', '', '', ''])
         
         if discharge_match:
             lake_data['discharge_cfs'] = discharge_match.group(3).strip()
             lake_data['discharge_location'] = discharge_match.group(1).strip()
             lake_data['discharge_date'] = discharge_match.group(2).strip()
+            data_row.extend([discharge_match.group(3).strip(), discharge_match.group(1).strip(),
+                           discharge_match.group(2).strip()])
             print(f"  ✓ Discharge: {discharge_match.group(3)} cfs")
+        else:
+            data_row.extend(['', '', ''])
         
-        return lake_data
+        return lake_data, data_row
         
     except Exception as e:
         print(f"  ✗ Error fetching lake data: {e}")
-        return None
+        return None, None
 
-def create_lake_chart(lake_data_history):
-    """Generate Kootenay Lake chart"""
+def create_lake_chart():
+    """Generate Kootenay Lake chart from Google Sheets data"""
     print("\n[CHART] Generating lake level chart...")
     
     try:
-        if not lake_data_history or len(lake_data_history) < 2:
-            print("  ⚠ Not enough historical data for chart yet")
+        df = read_from_sheets()
+        
+        if df is None or len(df) < 2:
+            print("  ⚠ Not enough data for chart yet (need at least 2 days)")
             return False
         
-        # Convert to DataFrame
-        df = pd.DataFrame(lake_data_history)
-        df['date'] = pd.to_datetime(df['date'])
-        df['level'] = pd.to_numeric(df['level'], errors='coerce')
-        df = df.dropna(subset=['level'])
+        # Process data
+        df['Scrape Time'] = pd.to_datetime(df['Scrape Time'], errors='coerce')
+        df['Date'] = df['Scrape Time'].dt.date
+        df['Date'] = pd.to_datetime(df['Date'])
+        df["Queen's Bay (ft)"] = pd.to_numeric(df["Queen's Bay (ft)"], errors='coerce')
         
-        if len(df) < 2:
+        # Get daily averages
+        daily_data = df.groupby('Date').agg({
+            "Queen's Bay (ft)": 'mean',
+            'Forecast Level': 'first',
+            'Forecast Date': 'first'
+        }).reset_index()
+        
+        daily_data = daily_data.dropna(subset=["Queen's Bay (ft)"])
+        
+        if len(daily_data) < 2:
             print("  ⚠ Not enough valid data points")
             return False
+        
+        print(f"  ✓ Plotting {len(daily_data)} days of data")
         
         # Create figure
         fig, ax = plt.subplots(figsize=(12, 6))
         
         # Plot data
-        ax.plot(df['date'], df['level'], 
+        ax.plot(daily_data['Date'], daily_data["Queen's Bay (ft)"], 
                 color='#e74c3c', linewidth=3, marker='o', markersize=6, 
                 label='2025 Actual', zorder=10)
         
-        # Add forecast if available
-        if 'forecast_level' in df.columns and 'forecast_date' in df.columns:
-            forecast_data = df[df['forecast_level'].notna()].tail(1)
-            if not forecast_data.empty:
-                try:
-                    forecast_level = float(forecast_data['forecast_level'].iloc[0])
-                    forecast_date = pd.to_datetime(forecast_data['forecast_date'].iloc[0])
-                    last_date = df['date'].iloc[-1]
-                    last_level = df['level'].iloc[-1]
-                    
-                    ax.plot([last_date, forecast_date], [last_level, forecast_level],
-                           'k--', linewidth=2, zorder=9, label='Forecast')
-                    ax.plot([last_date, forecast_date], [last_level, forecast_level],
-                           'k^', markersize=8, zorder=9)
-                except:
-                    pass
+        # Add forecast
+        forecast_data = daily_data[daily_data['Forecast Level'].notna()].tail(1)
+        if not forecast_data.empty:
+            try:
+                forecast_level = float(forecast_data['Forecast Level'].iloc[0])
+                forecast_date = pd.to_datetime(forecast_data['Forecast Date'].iloc[0])
+                last_date = daily_data['Date'].iloc[-1]
+                last_level = daily_data["Queen's Bay (ft)"].iloc[-1]
+                
+                ax.plot([last_date, forecast_date], [last_level, forecast_level],
+                       'k--', linewidth=2, zorder=9, label='Forecast')
+                ax.plot([last_date, forecast_date], [last_level, forecast_level],
+                       'k^', markersize=8, zorder=9)
+                
+                ax.annotate(f'Forecast\n{forecast_level} ft\n{forecast_date.strftime("%b %d")}',
+                           xy=(forecast_date, forecast_level), xytext=(10, 10),
+                           textcoords='offset points', fontsize=9,
+                           bbox=dict(boxstyle='round,pad=0.5', facecolor='yellow', alpha=0.7),
+                           arrowprops=dict(arrowstyle='->', lw=1.5))
+            except:
+                pass
         
         # Reference lines
         ax.axhline(y=1752, color='red', linestyle=':', linewidth=2, alpha=0.7, 
@@ -133,16 +247,18 @@ def create_lake_chart(lake_data_history):
         ax.axhspan(1740, 1750, alpha=0.08, color='gray', label='Historical Range', zorder=1)
         
         # Formatting
-        ax.set_title('Kootenay Lake Levels - Queens Bay', fontsize=16, fontweight='bold', pad=20)
-        ax.set_xlabel('Date', fontsize=12, fontweight='bold')
-        ax.set_ylabel('Elevation (feet)', fontsize=12, fontweight='bold')
+        ax.set_title('Kootenay Lake Levels - Queens Bay', fontsize=16, fontweight='bold', pad=15)
+        ax.set_xlabel('Date', fontsize=11, fontweight='bold')
+        ax.set_ylabel('Elevation (feet)', fontsize=11, fontweight='bold')
         ax.grid(True, alpha=0.3, linestyle='-', linewidth=0.5)
         ax.set_axisbelow(True)
         
-        current_level = df['level'].iloc[-1]
+        current_level = daily_data["Queen's Bay (ft)"].iloc[-1]
         ax.set_ylim(max(1737, current_level - 8), min(1755, current_level + 8))
         
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %d'))
+        if len(daily_data) > 7:
+            ax.xaxis.set_major_locator(mdates.DayLocator(interval=max(1, len(daily_data)//7)))
         plt.xticks(rotation=45, ha='right')
         ax.legend(loc='upper left', fontsize=9, framealpha=0.9)
         
@@ -162,45 +278,8 @@ def create_lake_chart(lake_data_history):
         traceback.print_exc()
         return False
 
-def load_lake_history():
-    """Load historical lake data from CSV file"""
-    csv_file = 'lake_data_history.csv'
-    
-    if os.path.exists(csv_file):
-        try:
-            df = pd.read_csv(csv_file)
-            return df.to_dict('records')
-        except:
-            return []
-    return []
-
-def save_lake_history(history, new_data):
-    """Append new lake data to history CSV"""
-    csv_file = 'lake_data_history.csv'
-    
-    timestamp = datetime.now().strftime('%Y-%m-%d')
-    
-    # Create new entry
-    new_entry = {
-        'date': timestamp,
-        'level': new_data.get('queens_ft', ''),
-        'level_m': new_data.get('queens_m', ''),
-        'forecast_level': new_data.get('forecast_level', ''),
-        'forecast_date': new_data.get('forecast_date', ''),
-        'discharge': new_data.get('discharge_cfs', '')
-    }
-    
-    # Check if today's data already exists
-    history = [h for h in history if h.get('date') != timestamp]
-    history.append(new_entry)
-    
-    # Save to CSV
-    df = pd.DataFrame(history)
-    df.to_csv(csv_file, index=False)
-    print(f"  ✓ Lake history updated ({len(history)} days)")
-
 # ============================================================================
-# WEATHER FUNCTIONS (keep your existing ones)
+# WEATHER FUNCTIONS
 # ============================================================================
 
 def get_weather_data():
@@ -218,43 +297,6 @@ def get_weather_data():
     except Exception as e:
         print(f"  ✗ Error fetching weather: {e}")
         raise
-
-def format_weather_report(weather_data, lake_data=None):
-    """Format weather data into readable report"""
-    current = weather_data['current']
-    daily = weather_data['daily'][0]
-    
-    pst = pytz.timezone('America/Los_Angeles')
-    now = datetime.now(pst)
-    
-    temp = current['temp']
-    feels_like = current['feels_like']
-    desc = current['weather'][0]['description']
-    wind_speed = current['wind_speed'] * 3.6  # m/s to km/h
-    humidity = current['humidity']
-    
-    report = f"""
-🌤️ BIRCHDALE WEATHER REPORT
-{now.strftime('%A, %B %d, %Y - %I:%M %p PST')}
-
-Current Conditions:
-Temperature: {temp:.1f}°C (Feels like {feels_like:.1f}°C)
-Conditions: {desc.title()}
-Wind: {wind_speed:.1f} km/h
-Humidity: {humidity}%
-High: {daily['temp']['max']:.0f}°C / Low: {daily['temp']['min']:.0f}°C
-"""
-    
-    # Add lake data if available
-    if lake_data:
-        report += f"""
-🌊 KOOTENAY LAKE LEVELS:
-Queen's Bay: {lake_data.get('queens_ft', 'N/A')} feet ({lake_data.get('queens_m', 'N/A')} meters)
-"""
-        if 'forecast_level' in lake_data:
-            report += f"Forecast: {lake_data['forecast_level']} ft by {lake_data.get('forecast_date', 'N/A')}\n"
-    
-    return report
 
 def generate_index_html(weather_data, lake_data=None):
     """Generate the index.html file with weather and lake data"""
@@ -317,14 +359,18 @@ def generate_index_html(weather_data, lake_data=None):
         </div>
         
         <div style="text-align: center; margin-top: 15px; font-size: 12px; opacity: 0.8;">
-          Data from FortisBC | Updated Daily
+          Data from FortisBC | Updated Daily at 6 AM PST
         </div>
       </div>
     </div>
 """
         
         # Insert before </body>
-        html_content = html_content.replace('</body>', f'{lake_section}\n</body>')
+        if '</body>' in html_content:
+            html_content = html_content.replace('</body>', f'{lake_section}\n</body>')
+        else:
+            # If no </body> tag, append at end
+            html_content += lake_section
     
     # Write the updated HTML
     with open('index.html', 'w', encoding='utf-8') as f:
@@ -346,23 +392,23 @@ def main():
         weather_data = get_weather_data()
         
         # Fetch lake data
-        lake_data = scrape_lake_data()
+        lake_data, data_row = scrape_lake_data()
         
-        # Load and update lake history
-        if lake_data:
-            history = load_lake_history()
-            save_lake_history(history, lake_data)
-            
-            # Generate chart
-            create_lake_chart(history)
+        # Write to Google Sheets
+        if lake_data and data_row:
+            try:
+                print("\n[SHEETS] Writing to Google Sheets...")
+                sheet = setup_google_sheets()
+                write_to_sheets(sheet, data_row)
+                print("  ✓ Data written to Google Sheets")
+            except Exception as e:
+                print(f"  ⚠ Could not write to Google Sheets: {e}")
+        
+        # Generate chart
+        create_lake_chart()
         
         # Generate HTML
         generate_index_html(weather_data, lake_data)
-        
-        # Generate weather report for email/SMS
-        report = format_weather_report(weather_data, lake_data)
-        
-        # Send email/SMS (keep your existing email/SMS code here if you have it)
         
         print("\n" + "=" * 70)
         print("✓ ALL TASKS COMPLETED SUCCESSFULLY")
