@@ -203,12 +203,14 @@ def create_lake_chart():
         
         print(f"  ✓ Plotting {len(daily_data)} days of data")
         
-        fig, ax = plt.subplots(figsize=(12, 6))
+        fig, ax = plt.subplots(figsize=(14, 7))
         
+        # Plot actual data
         ax.plot(daily_data['Date'], daily_data["Queen's Bay (ft)"], 
                 color='#e74c3c', linewidth=3, marker='o', markersize=6, 
                 label='2025 Actual', zorder=10)
         
+        # Plot forecast line and add forecast point marker
         forecast_data = daily_data[daily_data['Forecast Level'].notna()].tail(1)
         if not forecast_data.empty:
             try:
@@ -217,10 +219,15 @@ def create_lake_chart():
                 last_date = daily_data['Date'].iloc[-1]
                 last_level = daily_data["Queen's Bay (ft)"].iloc[-1]
                 
+                # Forecast line
                 ax.plot([last_date, forecast_date], [last_level, forecast_level],
-                       'k--', linewidth=2, zorder=9, label='Forecast')
+                       'k--', linewidth=2, zorder=9)
                 ax.plot([last_date, forecast_date], [last_level, forecast_level],
-                       'k^', markersize=8, zorder=9)
+                       'k^', markersize=8, zorder=9, label='Forecast Line')
+                
+                # BLACK DOT on forecast date - this will persist in data
+                ax.plot(forecast_date, forecast_level, 'ko', markersize=8, 
+                       zorder=11, label='Forecast Point', markeredgewidth=1.5, markeredgecolor='yellow')
                 
                 ax.annotate(f'Forecast\n{forecast_level} ft\n{forecast_date.strftime("%b %d")}',
                            xy=(forecast_date, forecast_level), xytext=(10, 10),
@@ -245,9 +252,14 @@ def create_lake_chart():
         current_level = daily_data["Queen's Bay (ft)"].iloc[-1]
         ax.set_ylim(max(1737, current_level - 8), min(1755, current_level + 8))
         
-        ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %d'))
-        if len(daily_data) > 7:
-            ax.xaxis.set_major_locator(mdates.DayLocator(interval=max(1, len(daily_data)//7)))
+        # Set x-axis to show full year (Jan 1 - Dec 31 of current year)
+        import datetime
+        current_year = daily_data['Date'].dt.year.iloc[-1]
+        ax.set_xlim(pd.Timestamp(f'{current_year}-01-01'), pd.Timestamp(f'{current_year}-12-31'))
+        
+        # Format x-axis to show months
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%b'))
+        ax.xaxis.set_major_locator(mdates.MonthLocator())
         plt.xticks(rotation=45, ha='right')
         ax.legend(loc='upper left', fontsize=9, framealpha=0.9)
         
@@ -300,69 +312,82 @@ def generate_index_html(weather_data, lake_data=None):
     with open(template_path, 'r', encoding='utf-8') as f:
         html_content = f.read()
     
-    # Add lake level section before </body> tag if lake data exists
+    # Add lake level section AFTER the seven-day forecast section (not before </body>)
     if lake_data:
         lake_section = f"""
     <!-- KOOTENAY LAKE LEVELS SECTION -->
     <div class="seven-day-section" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
       <h2 class="forecast-title" style="color: white;">🌊 Kootenay Lake Levels</h2>
       
-      <div style="background: rgba(255,255,255,0.1); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
-          <div style="background: rgba(255,255,255,0.15); padding: 15px; border-radius: 8px; text-align: center;">
-            <div style="font-size: 12px; opacity: 0.9; margin-bottom: 5px;">QUEEN'S BAY</div>
-            <div style="font-size: 32px; font-weight: 700;">{lake_data.get('queens_ft', 'N/A')}</div>
-            <div style="font-size: 14px; opacity: 0.8;">feet ({lake_data.get('queens_m', 'N/A')} m)</div>
-            <div style="font-size: 11px; opacity: 0.7; margin-top: 5px;">{lake_data.get('queens_updated', '')}</div>
+      <div style="background: rgba(255,255,255,0.1); border-radius: 12px; padding: 15px; margin-bottom: 20px;">
+        <!-- Data Cards - Mobile Responsive -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 15px;">
+          <div style="background: rgba(255,255,255,0.15); padding: 12px; border-radius: 8px; text-align: center;">
+            <div style="font-size: 11px; opacity: 0.9; margin-bottom: 5px;">QUEEN'S BAY</div>
+            <div style="font-size: 24px; font-weight: 700;">{lake_data.get('queens_ft', 'N/A')}</div>
+            <div style="font-size: 12px; opacity: 0.8;">feet</div>
+            <div style="font-size: 10px; opacity: 0.7; margin-top: 3px;">({lake_data.get('queens_m', 'N/A')} m)</div>
           </div>
           
-          <div style="background: rgba(255,255,255,0.15); padding: 15px; border-radius: 8px; text-align: center;">
-            <div style="font-size: 12px; opacity: 0.9; margin-bottom: 5px;">NELSON</div>
-            <div style="font-size: 32px; font-weight: 700;">{lake_data.get('nelson_ft', 'N/A')}</div>
-            <div style="font-size: 14px; opacity: 0.8;">feet ({lake_data.get('nelson_m', 'N/A')} m)</div>
-            <div style="font-size: 11px; opacity: 0.7; margin-top: 5px;">{lake_data.get('nelson_updated', '')}</div>
+          <div style="background: rgba(255,255,255,0.15); padding: 12px; border-radius: 8px; text-align: center;">
+            <div style="font-size: 11px; opacity: 0.9; margin-bottom: 5px;">NELSON</div>
+            <div style="font-size: 24px; font-weight: 700;">{lake_data.get('nelson_ft', 'N/A')}</div>
+            <div style="font-size: 12px; opacity: 0.8;">feet</div>
+            <div style="font-size: 10px; opacity: 0.7; margin-top: 3px;">({lake_data.get('nelson_m', 'N/A')} m)</div>
           </div>
 """
         
         if 'forecast_level' in lake_data and lake_data.get('forecast_level'):
             lake_section += f"""
-          <div style="background: rgba(255,255,255,0.15); padding: 15px; border-radius: 8px; text-align: center;">
-            <div style="font-size: 12px; opacity: 0.9; margin-bottom: 5px;">FORECAST</div>
-            <div style="font-size: 32px; font-weight: 700;">{lake_data['forecast_level']}</div>
-            <div style="font-size: 14px; opacity: 0.8;">feet</div>
-            <div style="font-size: 11px; opacity: 0.7; margin-top: 5px;">{lake_data.get('forecast_trend', '').title()} by {lake_data.get('forecast_date', '')}</div>
+          <div style="background: rgba(255,255,255,0.15); padding: 12px; border-radius: 8px; text-align: center;">
+            <div style="font-size: 11px; opacity: 0.9; margin-bottom: 5px;">FORECAST</div>
+            <div style="font-size: 24px; font-weight: 700;">{lake_data['forecast_level']}</div>
+            <div style="font-size: 12px; opacity: 0.8;">feet</div>
+            <div style="font-size: 10px; opacity: 0.7; margin-top: 3px;">{lake_data.get('forecast_trend', '').title()} by {lake_data.get('forecast_date', '')}</div>
           </div>
 """
         
         if 'discharge_cfs' in lake_data and lake_data.get('discharge_cfs'):
             lake_section += f"""
-          <div style="background: rgba(255,255,255,0.15); padding: 15px; border-radius: 8px; text-align: center;">
-            <div style="font-size: 12px; opacity: 0.9; margin-bottom: 5px;">DISCHARGE</div>
-            <div style="font-size: 32px; font-weight: 700;">{lake_data['discharge_cfs']}</div>
-            <div style="font-size: 14px; opacity: 0.8;">cfs</div>
-            <div style="font-size: 11px; opacity: 0.7; margin-top: 5px;">{lake_data.get('discharge_location', '')} - {lake_data.get('discharge_date', '')}</div>
+          <div style="background: rgba(255,255,255,0.15); padding: 12px; border-radius: 8px; text-align: center;">
+            <div style="font-size: 11px; opacity: 0.9; margin-bottom: 5px;">DISCHARGE</div>
+            <div style="font-size: 24px; font-weight: 700;">{lake_data['discharge_cfs']}</div>
+            <div style="font-size: 12px; opacity: 0.8;">cfs</div>
+            <div style="font-size: 10px; opacity: 0.7; margin-top: 3px;">{lake_data.get('discharge_location', '')} - {lake_data.get('discharge_date', '')}</div>
           </div>
 """
         
         lake_section += """
         </div>
         
-        <!-- Lake Chart -->
-        <div style="background: white; border-radius: 12px; padding: 15px; margin-top: 20px;">
-          <img src="lake_chart.png" alt="Kootenay Lake Level Chart" style="width: 100%; height: auto; border-radius: 8px;">
+        <!-- Lake Chart - Mobile Responsive -->
+        <div style="background: white; border-radius: 12px; padding: 10px; margin-top: 15px; overflow-x: auto;">
+          <img src="lake_chart.png" alt="Kootenay Lake Level Chart" style="width: 100%; min-width: 300px; height: auto; border-radius: 8px; display: block;">
         </div>
         
-        <div style="text-align: center; margin-top: 15px; font-size: 12px; opacity: 0.8;">
+        <div style="text-align: center; margin-top: 12px; font-size: 11px; opacity: 0.8;">
           Data from FortisBC | Updated Daily at 6 AM PST
         </div>
       </div>
     </div>
 """
         
-        if '</body>' in html_content:
-            html_content = html_content.replace('</body>', f'{lake_section}\n</body>')
+        # Insert AFTER seven-day section but BEFORE </body>
+        # Look for the closing of seven-day section
+        if 'class="seven-day-section"' in html_content:
+            # Find the last seven-day-section closing div
+            import re
+            # Insert lake section just before </body>
+            if '</body>' in html_content:
+                html_content = html_content.replace('</body>', f'{lake_section}\n</body>')
+            else:
+                html_content += lake_section
         else:
-            html_content += lake_section
+            # Fallback: just add before </body>
+            if '</body>' in html_content:
+                html_content = html_content.replace('</body>', f'{lake_section}\n</body>')
+            else:
+                html_content += lake_section
     
     # Write back to public/index.html (Netlify will deploy this)
     with open('public/index.html', 'w', encoding='utf-8') as f:
