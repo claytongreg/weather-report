@@ -383,14 +383,27 @@ def generate_index_html(weather_data, lake_data=None):
     </div>
 """
         
-        # Simple insertion: always add before </body>
-        if '</body>' in html_content:
-            html_content = html_content.replace('</body>', f'{lake_section}</body>', 1)
-            print("  ✓ Lake section added before </body>")
+        # Clean up any orphaned closing divs before inserting
+        # Remove any stray closing divs between </script> and </body>
+        import re
+        # Find the script end and body tag
+        script_end = html_content.rfind('</script>')
+        body_end = html_content.rfind('</body>')
+        
+        if script_end > 0 and body_end > script_end:
+            # Get the content between script and body
+            between = html_content[script_end + 9:body_end]
+            # Remove it and replace with just the lake section
+            html_content = html_content[:script_end + 9] + '\n' + lake_section + '\n</body>\n</html>'
+            print("  ✓ Lake section inserted, cleaned up orphaned tags")
         else:
-            # No </body> found, append to end
-            html_content += lake_section
-            print("  ✓ Lake section appended to end of HTML")
+            # Fallback: simple insertion
+            if '</body>' in html_content:
+                html_content = html_content.replace('</body>', f'{lake_section}</body>', 1)
+                print("  ✓ Lake section added before </body>")
+            else:
+                html_content += lake_section
+                print("  ✓ Lake section appended to end of HTML")
     
     # Write back to public/index.html (Netlify will deploy this)
     with open('public/index.html', 'w', encoding='utf-8') as f:
