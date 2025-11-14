@@ -599,7 +599,7 @@ def generate_lake_page(lake_data):
       <div class="chart-section">
         <h2>Historical Lake Level Trend</h2>
         <div class="chart-container">
-          <img src="lake_chart.png" alt="Kootenay Lake Level Chart">
+          <img src="lake_chart.png?v={datetime.now().strftime('%Y%m%d%H%M')}" alt="Kootenay Lake Level Chart">
         </div>
       </div>
       
