@@ -41,52 +41,73 @@ jobs:
       
       - name: Setup Google Credentials
         run: |
-          # Decode base64 credentials and save to file
           echo "$GOOGLE_CREDENTIALS_JSON" | base64 -d > credentials.json
           echo "✓ Google credentials file created"
       
-      - name: Run weather & lake monitoring script
+      - name: Prepare public directory
+        run: |
+          # Create public directory if it doesn't exist
+          mkdir -p public
+          
+          # Copy index.html template to public/ (this is the weather page)
+          cp index.html public/index.html
+          echo "✓ Copied index.html to public/"
+      
+      - name: Run lake monitoring script
         run: python main.py
       
-      - name: Check if files were generated
+      - name: Verify generated files
         run: |
+          echo "=== Checking generated files ==="
+          
           if [ -f public/index.html ]; then
-            echo "✓ public/index.html generated successfully"
+            echo "✓ public/index.html exists"
             ls -lh public/index.html
           else
-            echo "✗ ERROR: public/index.html was not generated!"
+            echo "✗ ERROR: public/index.html missing!"
+            exit 1
+          fi
+          
+          if [ -f public/lake.html ]; then
+            echo "✓ public/lake.html exists"  
+            ls -lh public/lake.html
+          else
+            echo "✗ ERROR: public/lake.html missing!"
             exit 1
           fi
           
           if [ -f public/lake_chart.png ]; then
-            echo "✓ Lake chart generated successfully"
+            echo "✓ public/lake_chart.png exists"
             ls -lh public/lake_chart.png
           else
-            echo "⚠ Warning: Lake chart not generated (may need more data)"
+            echo "✗ ERROR: public/lake_chart.png missing!"
+            exit 1
           fi
+          
+          echo "=== All files present! ==="
       
       - name: Commit and push updates
         run: |
           git config --local user.name "Weather & Lake Bot"
           git config --local user.email "weather-bot@github-actions"
           
-          # Remove credentials file before committing
           rm -f credentials.json
           
-          # CRITICAL: Add the files that Netlify will deploy
+          # Add ALL files in public directory
           git add public/index.html
-          git add public/lake_chart.png 2>/dev/null || true
+          git add public/lake.html
+          git add public/lake_chart.png
           
-          # Check if there are changes to commit
+          echo "=== Files staged for commit ==="
+          git diff --staged --name-only
+          
           if git diff --staged --quiet; then
-            echo "No changes to commit"
+            echo "ℹ️  No changes to commit"
           else
-            # Pull any remote changes first to avoid conflicts
             git pull --rebase origin main || true
-            
             git commit -m "Update weather & lake data - $(date +'%Y-%m-%d %I:%M %p PST') [skip ci]"
             git push
-            echo "✓ Weather & lake data pushed to repository"
+            echo "✓ Files pushed to repository"
             echo "✓ Netlify will auto-deploy from public/ directory"
           fi
       
@@ -95,11 +116,14 @@ jobs:
         run: |
           echo "========================================="
           echo "✓ Workflow completed successfully!"
-          echo "✓ Lake data written to Google Sheets"
-          echo "✓ Chart generated from historical data"
-          echo "✓ Files pushed to public/ directory"
-          echo "✓ Netlify will auto-deploy updates"
-          echo "✓ Site: https://birchdale-weather.netlify.app/"
+          echo "✓ Weather page: public/index.html"
+          echo "✓ Lake page: public/lake.html"
+          echo "✓ Lake chart: public/lake_chart.png"
+          echo "✓ Netlify deploys from: public/"
+          echo ""
+          echo "URLs after deployment:"
+          echo "  Main: https://birchdale-weather.netlify.app/"
+          echo "  Lake: https://birchdale-weather.netlify.app/lake.html"
           echo "========================================="
       
       - name: Notify on failure
