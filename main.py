@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
+import time
 
 # Configuration
 LAT = 50.038417
@@ -178,12 +179,18 @@ def create_lake_chart():
     """Generate Kootenay Lake chart with BLACK TRIANGLE forecast marker"""
     print("\n[CHART] Generating lake level chart...")
     
-    # Delete existing PNG to ensure Git detects changes
+    # CRITICAL FIX: Delete existing PNG to ensure Git detects changes
     chart_path = 'public/lake_chart.png'
     if os.path.exists(chart_path):
-        os.remove(chart_path)
-        print(f"  ✓ Removed existing chart: {chart_path}")
-
+        try:
+            old_size = os.path.getsize(chart_path)
+            old_time = datetime.fromtimestamp(os.path.getmtime(chart_path)).strftime('%Y-%m-%d %H:%M:%S')
+            os.remove(chart_path)
+            print(f"  ✓ Removed existing chart (was {old_size:,} bytes from {old_time})")
+            time.sleep(0.2)  # Brief pause after deletion
+        except Exception as e:
+            print(f"  ⚠ Could not remove existing chart: {e}")
+    
     try:
         df = read_from_sheets()
         
@@ -236,7 +243,7 @@ def create_lake_chart():
         
         if not forecast_rows.empty:
             try:
-                forecast_row = forecast_rows.iloc[-1]  # Most recent forecast
+                forecast_row = forecast_rows.iloc[-1]
                 forecast_level = float(forecast_row['Forecast Level'])
                 
                 # Set forecast date to Nov 21 (adjust year if needed)
@@ -298,12 +305,42 @@ def create_lake_chart():
         
         plt.tight_layout()
         
-        # Save to public directory
+        # CRITICAL: Ensure directory exists
         os.makedirs('public', exist_ok=True)
-        plt.savefig('public/lake_chart.png', dpi=150, bbox_inches='tight', facecolor='white')
-        plt.close()
         
-        print("  ✓ Chart saved to public/lake_chart.png")
+        # Save with MAXIMUM robustness
+        print(f"  → Saving chart to {chart_path}...")
+        plt.savefig(chart_path, dpi=150, bbox_inches='tight', facecolor='white')
+        plt.close('all')  # Close all figures explicitly
+        
+        # Force matplotlib to flush
+        import gc
+        gc.collect()
+        
+        # Brief pause to ensure write completes
+        time.sleep(0.3)
+        
+        # VERIFY FILE WAS CREATED
+        if os.path.exists(chart_path):
+            file_size = os.path.getsize(chart_path)
+            mod_time = datetime.fromtimestamp(os.path.getmtime(chart_path)).strftime('%Y-%m-%d %H:%M:%S')
+            print(f"  ✓ Chart saved successfully!")
+            print(f"  ✓ Path: {chart_path}")
+            print(f"  ✓ Size: {file_size:,} bytes")
+            print(f"  ✓ Modified: {mod_time}")
+            
+            # Double check it's a valid PNG
+            with open(chart_path, 'rb') as f:
+                png_header = f.read(8)
+                if png_header[:4] == b'\x89PNG':
+                    print(f"  ✓ Valid PNG file confirmed")
+                else:
+                    print(f"  ✗ WARNING: File may be corrupted!")
+                    return False
+        else:
+            print(f"  ✗ ERROR: File not created at {chart_path}!")
+            return False
+        
         return True
         
     except Exception as e:
@@ -311,8 +348,6 @@ def create_lake_chart():
         import traceback
         traceback.print_exc()
         return False
-
-def generate_lake_page(lake_data):
     """Generate STATIC lake.html page - NO DUPLICATION!"""
     print("\n[HTML] Generating lake page (static)...")
     
