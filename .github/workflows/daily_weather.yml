@@ -1,7 +1,4 @@
-name: Daily Birchdale Weather & Lake Report (NO PNG IN GIT)
-
-# This version uploads the PNG as a GitHub Release Asset instead of committing it
-# This completely sidesteps the Git tracking issue
+name: Daily Birchdale Weather & Lake Report (SIMPLE - PNG IN GIT)
 
 on:
   schedule:
@@ -54,61 +51,25 @@ jobs:
       - name: Run lake monitoring script
         run: python main.py
       
-      - name: Upload PNG to GitHub Release
+      - name: Commit and push (SIMPLE VERSION)
         run: |
-          # Create/update a release to hold the PNG
-          TIMESTAMP=$(date +'%Y-%m-%d_%H-%M-%S')
-          
-          # Delete old "latest-chart" release if it exists
-          gh release delete latest-chart --yes 2>/dev/null || true
-          
-          # Create new release with the PNG
-          gh release create latest-chart \
-            public/lake_chart.png \
-            --title "Latest Lake Chart" \
-            --notes "Updated: $TIMESTAMP PST" \
-            --latest
-          
-          echo "✓ PNG uploaded to release"
-          echo "PNG URL: https://github.com/${{ github.repository }}/releases/download/latest-chart/lake_chart.png"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Update lake.html to use release URL
-        run: |
-          # Update the HTML to point to the release URL
-          sed -i 's|src="lake_chart.png"|src="https://github.com/${{ github.repository }}/releases/download/latest-chart/lake_chart.png"|g' public/lake.html
-          
-          echo "✓ HTML updated to use release URL"
-      
-      - name: Commit HTML changes only
-        run: |
-          git config --local user.name "Weather & Lake Bot"
-          git config --local user.email "weather-bot@github-actions"
+          git config --global user.name "Weather & Lake Bot"
+          git config --global user.email "weather-bot@github-actions"
           
           rm -f credentials.json
           
-          # Only commit HTML files - NO PNG!
-          git add public/index.html
-          git add public/lake.html
+          # Just add everything and commit
+          git add public/
           
           TIMESTAMP=$(date +'%Y-%m-%d %I:%M %p PST')
           
-          if git diff --staged --quiet; then
-            echo "No HTML changes to commit"
-          else
-            git pull --rebase origin main || true
-            git commit -m "Update lake data - $TIMESTAMP [skip ci]"
-            git push
-            echo "✓ HTML changes pushed (PNG in release, not in Git)"
-          fi
+          # Use commit -a to catch all changes
+          git commit -am "Update lake data & chart - $TIMESTAMP [skip ci]" || echo "No changes"
+          
+          git push origin main || echo "Push failed"
       
       - name: Summary
         run: |
           echo "========================================="
-          echo "✓ WORKFLOW COMPLETE"
-          echo "========================================="
-          echo "PNG Location: GitHub Release (not in Git)"
-          echo "PNG URL: https://github.com/${{ github.repository }}/releases/download/latest-chart/lake_chart.png"
-          echo "HTML files updated in Git"
+          echo "Workflow completed"
           echo "========================================="
