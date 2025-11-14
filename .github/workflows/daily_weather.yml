@@ -47,29 +47,59 @@ jobs:
         run: |
           mkdir -p public
           cp index.html public/index.html
+          
+          # Save hash of old PNG
+          if [ -f public/lake_chart.png ]; then
+            OLD_HASH=$(md5sum public/lake_chart.png | cut -d' ' -f1)
+            echo "Old PNG hash: $OLD_HASH"
+            echo "OLD_HASH=$OLD_HASH" >> $GITHUB_ENV
+          else
+            echo "OLD_HASH=none" >> $GITHUB_ENV
+          fi
       
       - name: Run lake monitoring script
         run: python main.py
       
-      - name: Commit and push
+      - name: Check if PNG changed
+        run: |
+          if [ -f public/lake_chart.png ]; then
+            NEW_HASH=$(md5sum public/lake_chart.png | cut -d' ' -f1)
+            echo "New PNG hash: $NEW_HASH"
+            echo "NEW_HASH=$NEW_HASH" >> $GITHUB_ENV
+            
+            if [ "$OLD_HASH" != "$NEW_HASH" ]; then
+              echo "PNG_CHANGED=true" >> $GITHUB_ENV
+              echo "✓ PNG has new data!"
+            else
+              echo "PNG_CHANGED=false" >> $GITHUB_ENV
+              echo "⚠ PNG unchanged (same hash)"
+            fi
+          fi
+      
+      - name: Commit files
         run: |
           git config --local user.name "Weather & Lake Bot"
           git config --local user.email "weather-bot@github-actions"
           
           rm -f credentials.json
           
-          # Use git add -A to stage ALL changes in public/
-          cd public/
-          git add -A .
-          cd ..
+          # Add all files
+          git add public/index.html
+          git add public/lake.html
           
-          echo "=== Files in public/ ==="
-          ls -lh public/
+          # If PNG changed, force add it
+          if [ "$PNG_CHANGED" = "true" ]; then
+            echo "Force adding PNG (it changed)"
+            git add -f public/lake_chart.png
+          else
+            echo "PNG unchanged, but adding anyway"
+            git add public/lake_chart.png
+          fi
           
           echo "=== Git status ==="
-          git status
+          git status --short
           
-          echo "=== Staged files ==="
+          echo "=== Files staged ==="
           git diff --staged --name-status
           
           if git diff --staged --quiet; then
@@ -78,5 +108,15 @@ jobs:
             git pull --rebase origin main || true
             git commit -m "Update lake data & chart - $(date +'%Y-%m-%d %I:%M %p PST') [skip ci]"
             git push || (git pull --rebase origin main && git push)
-            echo "✓ Changes pushed"
+            echo "✓ Pushed to repo"
           fi
+      
+      - name: Summary
+        if: success()
+        run: |
+          echo "========================================="
+          echo "Workflow completed!"
+          echo "Old PNG hash: $OLD_HASH"
+          echo "New PNG hash: $NEW_HASH"
+          echo "PNG changed: $PNG_CHANGED"
+          echo "========================================="
