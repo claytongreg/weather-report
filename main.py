@@ -306,14 +306,7 @@ def create_lake_chart():
                                markeredgewidth=0, zorder=11,
                                label=f'Forecast: {forecast_level} ft')
                         
-                        # Small annotation
-                        ax.annotate(f'{forecast_level} ft\n{forecast_date.strftime("%b %d")}',
-                                   xy=(forecast_date, forecast_level), 
-                                   xytext=(10, 10),
-                                   textcoords='offset points', 
-                                   fontsize=8,
-                                   bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', alpha=0.7),
-                                   arrowprops=dict(arrowstyle='->', lw=1))
+                        # No annotation - just the triangle
                         
                         print(f"  ✓ Added forecast marker at {forecast_date.strftime('%Y-%m-%d')}: {forecast_level} ft")
                     else:
