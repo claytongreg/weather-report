@@ -129,9 +129,7 @@ jobs:
           echo ""
           echo "=== COMMITTING ==="
           TIMESTAMP=$(date +'%Y-%m-%d %I:%M %p PST')
-          git commit -m "Update lake data & chart - $TIMESTAMP
-
-PNG: $NEW_SIZE bytes | Hash: $NEW_HASH"
+          git commit -m "Update lake data & chart - $TIMESTAMP" -m "PNG: $NEW_SIZE bytes | Hash: $NEW_HASH"
           
           echo ""
           echo "=== PUSHING ==="
