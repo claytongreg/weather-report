@@ -87,6 +87,37 @@ jobs:
           echo "  Size: $NEW_SIZE bytes"
           echo "  Hash: $NEW_HASH"
           
+          # Check if PNG changed from what's in Git
+          echo ""
+          echo "=== COMPARING WITH GIT VERSION ==="
+          
+          if git ls-files --error-unmatch public/lake_chart.png 2>/dev/null; then
+            # PNG is tracked, compare with Git version
+            git show HEAD:public/lake_chart.png > /tmp/old_png.png 2>/dev/null || echo "No previous version"
+            
+            if [ -f /tmp/old_png.png ]; then
+              OLD_HASH=$(md5sum /tmp/old_png.png | cut -d' ' -f1)
+              echo "Old PNG hash: $OLD_HASH"
+              echo "New PNG hash: $NEW_HASH"
+              
+              if [ "$OLD_HASH" = "$NEW_HASH" ]; then
+                echo "⚠ WARNING: PNG is IDENTICAL to Git version!"
+                echo "This means the PNG data hasn't actually changed"
+                echo "Touching file to force Git to see it as modified..."
+                
+                # Force file to be seen as changed
+                touch public/lake_chart.png
+                sleep 1
+                
+                echo "✓ File touched - Git should now see it as modified"
+              else
+                echo "✓ PNG is DIFFERENT from Git version - will be staged"
+              fi
+            fi
+          else
+            echo "✓ PNG not in Git yet - will be added"
+          fi
+          
           # Store for comparison
           echo "NEW_SIZE=$NEW_SIZE" >> $GITHUB_ENV
           echo "NEW_HASH=$NEW_HASH" >> $GITHUB_ENV
@@ -100,24 +131,66 @@ jobs:
         run: |
           rm -f credentials.json
           
+          echo "=== CLEARING GIT CACHE FOR PNG ==="
+          # Remove PNG from Git cache to force fresh tracking
+          git rm --cached public/lake_chart.png 2>/dev/null || echo "PNG not in cache"
+          
+          echo ""
           echo "=== STAGING FILES ==="
           
           # Stage all public files
           git add public/index.html
           git add public/lake.html
+          
+          # Force add PNG multiple ways
           git add public/lake_chart.png
+          git add -f public/lake_chart.png
+          git add --force public/lake_chart.png
           
           echo ""
           echo "=== WHAT'S STAGED ==="
           git diff --cached --name-status
           git diff --cached --stat
           
+          echo ""
+          echo "=== CHECKING PNG STATUS ==="
+          
+          # Check if PNG exists
+          if [ ! -f public/lake_chart.png ]; then
+            echo "✗ ERROR: PNG file doesn't exist!"
+            exit 1
+          fi
+          
+          # Check if PNG is tracked
+          if git ls-files --error-unmatch public/lake_chart.png 2>/dev/null; then
+            echo "✓ PNG is tracked by Git"
+          else
+            echo "⚠ PNG is not tracked - adding to Git"
+            git add -N public/lake_chart.png
+            git add -f public/lake_chart.png
+          fi
+          
           # Verify PNG is actually staged
           if git diff --cached --name-only | grep -q "public/lake_chart.png"; then
             echo "✓ PNG is staged for commit"
           else
-            echo "✗ WARNING: PNG is NOT staged!"
-            exit 1
+            echo "✗ PNG STILL not staged - trying nuclear option"
+            
+            # Nuclear option: use update-index
+            git update-index --add public/lake_chart.png
+            git add -f public/lake_chart.png
+            
+            # Check again
+            if git diff --cached --name-only | grep -q "public/lake_chart.png"; then
+              echo "✓ PNG staged via nuclear option"
+            else
+              echo "✗ FATAL: Cannot stage PNG!"
+              echo "Git status:"
+              git status public/lake_chart.png
+              echo "Git diff:"
+              git diff public/lake_chart.png
+              exit 1
+            fi
           fi
           
           # Check if there are changes
