@@ -236,52 +236,72 @@ def create_lake_chart():
                 label='2025 Actual', zorder=10)
         
         # ========== ADD BLACK TRIANGLE FORECAST MARKER ==========
-        forecast_rows = daily_data[
-            (daily_data['Forecast Level'].notna()) & 
-            (daily_data['Forecast Date'].str.contains('November 21|Nov 21|Nov. 21', case=False, na=False))
-        ]
+        # Get the most recent forecast data
+        forecast_rows = daily_data[daily_data['Forecast Level'].notna()]
         
         if not forecast_rows.empty:
             try:
+                # Get the most recent forecast
                 forecast_row = forecast_rows.iloc[-1]
                 forecast_level = float(forecast_row['Forecast Level'])
+                forecast_date_str = str(forecast_row['Forecast Date'])
                 
-                # Set forecast date to Nov 21 (adjust year if needed)
-                current_year = daily_data['Date'].dt.year.iloc[-1]
-                forecast_date = pd.Timestamp(f'{current_year}-11-21')
+                # Parse the forecast date
+                # Common formats: "November 21, 2025", "Nov 21", "November 21"
+                import re
+                from dateutil import parser
                 
-                last_date = daily_data['Date'].iloc[-1]
-                last_level = daily_data["Queen's Bay (ft)"].iloc[-1]
-                
-                # Dashed forecast line from current to forecast
-                ax.plot([last_date, forecast_date], [last_level, forecast_level],
-                       'k--', linewidth=1.5, alpha=0.6, zorder=9)
-                
-                # BLACK TRIANGLE at forecast date - this is the key fix!
-                ax.plot(forecast_date, forecast_level, '^', 
-                       color='black', markersize=12, 
-                       markeredgewidth=0, zorder=11,
-                       label=f'Forecast: {forecast_level} ft')
-                
-                # Annotation
-                ax.annotate(f'Forecast\n{forecast_level} ft\n{forecast_date.strftime("%b %d")}',
-                           xy=(forecast_date, forecast_level), 
-                           xytext=(10, 10),
-                           textcoords='offset points', 
-                           fontsize=9,
-                           bbox=dict(boxstyle='round,pad=0.5', facecolor='yellow', alpha=0.7),
-                           arrowprops=dict(arrowstyle='->', lw=1.5))
-                
-                print(f"  ✓ Added BLACK TRIANGLE forecast marker at {forecast_date.strftime('%Y-%m-%d')}: {forecast_level} ft")
+                try:
+                    # Try to parse the date string
+                    forecast_date = parser.parse(forecast_date_str)
+                    forecast_date = pd.Timestamp(forecast_date)
+                    
+                    # If year wasn't in string, use current year
+                    if forecast_date.year == 1900:  # Default year from parser
+                        current_year = daily_data['Date'].dt.year.iloc[-1]
+                        forecast_date = forecast_date.replace(year=current_year)
+                    
+                    last_date = daily_data['Date'].iloc[-1]
+                    last_level = daily_data["Queen's Bay (ft)"].iloc[-1]
+                    
+                    # Only draw if forecast is in the future
+                    if forecast_date > last_date:
+                        # Dashed forecast line from current to forecast
+                        ax.plot([last_date, forecast_date], [last_level, forecast_level],
+                               'k--', linewidth=1.5, alpha=0.6, zorder=9)
+                        
+                        # BLACK TRIANGLE at forecast date
+                        ax.plot(forecast_date, forecast_level, '^', 
+                               color='black', markersize=12, 
+                               markeredgewidth=0, zorder=11,
+                               label=f'Forecast: {forecast_level} ft')
+                        
+                        # Small annotation
+                        ax.annotate(f'{forecast_level} ft\n{forecast_date.strftime("%b %d")}',
+                                   xy=(forecast_date, forecast_level), 
+                                   xytext=(10, 10),
+                                   textcoords='offset points', 
+                                   fontsize=8,
+                                   bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', alpha=0.7),
+                                   arrowprops=dict(arrowstyle='->', lw=1))
+                        
+                        print(f"  ✓ Added forecast marker at {forecast_date.strftime('%Y-%m-%d')}: {forecast_level} ft")
+                    else:
+                        print(f"  ⓘ Forecast date {forecast_date.strftime('%Y-%m-%d')} is in the past, not showing marker")
+                        
+                except Exception as date_parse_error:
+                    print(f"  ⚠ Could not parse forecast date '{forecast_date_str}': {date_parse_error}")
+                    
             except Exception as e:
                 print(f"  ⚠ Could not add forecast marker: {e}")
+        else:
+            print("  ⓘ No forecast data available")
         
         # Reference lines
         ax.axhline(y=1752, color='red', linestyle=':', linewidth=2, alpha=0.7, 
                    label='Flood Level (1752 ft)')
         ax.axhline(y=1754.24, color='darkred', linestyle='--', linewidth=1.5, alpha=0.6,
                    label='Record High (1754.24 ft)')
-        ax.axhspan(1740, 1750, alpha=0.08, color='gray', label='Historical Range', zorder=1)
         
         # Styling
         ax.set_title('Kootenay Lake Levels - Queens Bay', fontsize=16, fontweight='bold', pad=15)
