@@ -212,12 +212,33 @@ def create_lake_chart():
         df['Forecast Level'] = pd.to_numeric(df['Forecast Level'], errors='coerce')
         df['Forecast Date'] = df['Forecast Date'].astype(str)
         
+        # DEBUG: Check forecast data before aggregation
+        print(f"  [DEBUG] Total rows in spreadsheet: {len(df)}")
+        print(f"  [DEBUG] Forecast Level column type: {df['Forecast Level'].dtype}")
+        print(f"  [DEBUG] Sample Forecast Level values: {df['Forecast Level'].head(10).tolist()}")
+        print(f"  [DEBUG] Forecast Date column type: {df['Forecast Date'].dtype}")
+        print(f"  [DEBUG] Sample Forecast Date values: {df['Forecast Date'].head(10).tolist()}")
+        
+        forecast_check = df[df['Forecast Level'].notna()]
+        if not forecast_check.empty:
+            print(f"  ✓ Found {len(forecast_check)} rows with forecast data before aggregation")
+            print(f"    Latest forecast: {forecast_check.iloc[-1]['Forecast Level']} ft on {forecast_check.iloc[-1]['Forecast Date']}")
+        else:
+            print(f"  ⚠ No forecast data found in raw data (all NaN)")
+        
         # Aggregate daily data
         daily_data = df.groupby('Date').agg({
             "Queen's Bay (ft)": 'mean',
-            'Forecast Level': 'first',
-            'Forecast Date': 'first'
+            'Forecast Level': 'last',  # Changed from 'first' to 'last' to get most recent
+            'Forecast Date': 'last'     # Changed from 'first' to 'last' to get most recent
         }).reset_index()
+        
+        # DEBUG: Check forecast data after aggregation
+        forecast_check_agg = daily_data[daily_data['Forecast Level'].notna()]
+        if not forecast_check_agg.empty:
+            print(f"  ✓ {len(forecast_check_agg)} days with forecast data after aggregation")
+        else:
+            print(f"  ⚠ No forecast data after aggregation (lost in groupby)")
         
         daily_data = daily_data.dropna(subset=["Queen's Bay (ft)"])
         
@@ -237,7 +258,16 @@ def create_lake_chart():
         
         # ========== ADD BLACK TRIANGLE FORECAST MARKER ==========
         # Get the most recent forecast data
-        forecast_rows = daily_data[daily_data['Forecast Level'].notna()]
+        # Filter out both NaN values and empty/nan strings
+        forecast_rows = daily_data[
+            (daily_data['Forecast Level'].notna()) & 
+            (daily_data['Forecast Date'].notna()) &
+            (daily_data['Forecast Date'] != '') &
+            (daily_data['Forecast Date'] != 'nan') &
+            (daily_data['Forecast Date'] != 'None')
+        ]
+        
+        print(f"  ⓘ Found {len(forecast_rows)} rows with valid forecast data")
         
         if not forecast_rows.empty:
             try:
