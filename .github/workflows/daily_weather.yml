@@ -42,77 +42,41 @@ jobs:
       - name: Setup Google Credentials
         run: |
           echo "$GOOGLE_CREDENTIALS_JSON" | base64 -d > credentials.json
-          echo "✓ Google credentials file created"
       
       - name: Prepare public directory
         run: |
           mkdir -p public
-          
-          # Copy index.html template to public/
           cp index.html public/index.html
-          echo "✓ Copied index.html to public/"
-          
-          # DELETE old PNG so Git sees new one as a change
-          if [ -f public/lake_chart.png ]; then
-            rm public/lake_chart.png
-            echo "✓ Deleted old lake_chart.png"
-          fi
       
       - name: Run lake monitoring script
         run: python main.py
       
-      - name: Verify generated files
-        run: |
-          echo "=== Checking generated files ==="
-          
-          if [ -f public/lake.html ]; then
-            echo "✓ public/lake.html exists"  
-            ls -lh public/lake.html
-          else
-            echo "✗ ERROR: public/lake.html missing!"
-            exit 1
-          fi
-          
-          if [ -f public/lake_chart.png ]; then
-            echo "✓ public/lake_chart.png exists (NEWLY CREATED)"
-            ls -lh public/lake_chart.png
-          else
-            echo "✗ ERROR: public/lake_chart.png missing!"
-            exit 1
-          fi
-      
-      - name: Commit and push updates
+      - name: Commit and push
         run: |
           git config --local user.name "Weather & Lake Bot"
           git config --local user.email "weather-bot@github-actions"
           
           rm -f credentials.json
           
-          # Add all files - PNG should now be seen as changed
-          git add public/index.html
-          git add public/lake.html
-          git add public/lake_chart.png
+          # Use git add -A to stage ALL changes in public/
+          cd public/
+          git add -A .
+          cd ..
           
-          echo "=== Files staged for commit ==="
-          git diff --staged --name-only
+          echo "=== Files in public/ ==="
+          ls -lh public/
           
           echo "=== Git status ==="
-          git status public/
+          git status
+          
+          echo "=== Staged files ==="
+          git diff --staged --name-status
           
           if git diff --staged --quiet; then
-            echo "ℹ️  No changes to commit"
+            echo "No changes to commit"
           else
+            git pull --rebase origin main || true
             git commit -m "Update lake data & chart - $(date +'%Y-%m-%d %I:%M %p PST') [skip ci]"
-            git push
-            echo "✓ Files pushed to repository"
-            echo "✓ Chart PNG should now be updated!"
+            git push || (git pull --rebase origin main && git push)
+            echo "✓ Changes pushed"
           fi
-      
-      - name: Deployment status
-        if: success()
-        run: |
-          echo "========================================="
-          echo "✓ Workflow completed!"
-          echo "✓ Chart regenerated and committed"
-          echo "✓ Check: https://birchdale-weather.netlify.app/lake.html"
-          echo "========================================="
