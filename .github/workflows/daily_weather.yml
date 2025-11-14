@@ -1,4 +1,7 @@
-name: Daily Birchdale Weather & Lake Report (WITH DEBUGGING)
+name: Daily Birchdale Weather & Lake Report (NO PNG IN GIT)
+
+# This version uploads the PNG as a GitHub Release Asset instead of committing it
+# This completely sidesteps the Git tracking issue
 
 on:
   schedule:
@@ -28,7 +31,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
       
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -48,232 +50,65 @@ jobs:
         run: |
           mkdir -p public
           cp index.html public/index.html
-          
-          echo "=== BEFORE GENERATION ==="
-          if [ -f public/lake_chart.png ]; then
-            ls -lh public/lake_chart.png
-            OLD_HASH=$(md5sum public/lake_chart.png | cut -d' ' -f1)
-            OLD_SIZE=$(stat -c%s public/lake_chart.png 2>/dev/null || stat -f%z public/lake_chart.png)
-            echo "Old PNG hash: $OLD_HASH"
-            echo "Old PNG size: $OLD_SIZE bytes"
-            echo "OLD_HASH=$OLD_HASH" >> $GITHUB_ENV
-            echo "OLD_SIZE=$OLD_SIZE" >> $GITHUB_ENV
-          else
-            echo "No existing PNG found"
-            echo "OLD_HASH=none" >> $GITHUB_ENV
-            echo "OLD_SIZE=0" >> $GITHUB_ENV
-          fi
       
       - name: Run lake monitoring script
-        run: |
-          echo "=== RUNNING MAIN.PY ==="
-          python main.py
-          echo "=== MAIN.PY COMPLETED ==="
+        run: python main.py
       
-      - name: Verify PNG after generation
+      - name: Upload PNG to GitHub Release
         run: |
-          echo "=== AFTER GENERATION ==="
-          if [ -f public/lake_chart.png ]; then
-            ls -lh public/lake_chart.png
-            NEW_HASH=$(md5sum public/lake_chart.png | cut -d' ' -f1)
-            NEW_SIZE=$(stat -c%s public/lake_chart.png 2>/dev/null || stat -f%z public/lake_chart.png)
-            echo "New PNG hash: $NEW_HASH"
-            echo "New PNG size: $NEW_SIZE bytes"
-            echo "NEW_HASH=$NEW_HASH" >> $GITHUB_ENV
-            echo "NEW_SIZE=$NEW_SIZE" >> $GITHUB_ENV
-            
-            if [ "$OLD_HASH" != "$NEW_HASH" ]; then
-              echo "PNG_CHANGED=true" >> $GITHUB_ENV
-              echo "✓ PNG has new data!"
-            else
-              echo "PNG_CHANGED=false" >> $GITHUB_ENV
-              echo "⚠ PNG unchanged (same hash)"
-            fi
-            
-            if file public/lake_chart.png | grep -q "PNG"; then
-              echo "✓ Valid PNG file confirmed"
-            else
-              echo "✗ WARNING: File may not be valid PNG!"
-              file public/lake_chart.png
-            fi
-          else
-            echo "✗ ERROR: PNG was not created!"
-            exit 1
-          fi
+          # Create/update a release to hold the PNG
+          TIMESTAMP=$(date +'%Y-%m-%d_%H-%M-%S')
+          
+          # Delete old "latest-chart" release if it exists
+          gh release delete latest-chart --yes 2>/dev/null || true
+          
+          # Create new release with the PNG
+          gh release create latest-chart \
+            public/lake_chart.png \
+            --title "Latest Lake Chart" \
+            --notes "Updated: $TIMESTAMP PST" \
+            --latest
+          
+          echo "✓ PNG uploaded to release"
+          echo "PNG URL: https://github.com/${{ github.repository }}/releases/download/latest-chart/lake_chart.png"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
-      # ============================================================
-      # THIS IS THE NEW DEBUGGING STEP - ADD THIS!
-      # ============================================================
-      - name: 🔍 DEEP PNG DEBUGGING
+      - name: Update lake.html to use release URL
         run: |
-          echo ""
-          echo "========================================="
-          echo "🔍 DEEP PNG DEBUGGING"
-          echo "========================================="
-          echo ""
+          # Update the HTML to point to the release URL
+          sed -i 's|src="lake_chart.png"|src="https://github.com/${{ github.repository }}/releases/download/latest-chart/lake_chart.png"|g' public/lake.html
           
-          echo "1. Git status of PNG:"
-          git status public/lake_chart.png
-          echo ""
-          
-          echo "2. Is PNG tracked by Git?"
-          if git ls-files --error-unmatch public/lake_chart.png 2>/dev/null; then
-            echo "   ✓ YES - PNG is tracked"
-          else
-            echo "   ✗ NO - PNG is NOT tracked!"
-          fi
-          echo ""
-          
-          echo "3. What does Git think changed?"
-          git diff public/lake_chart.png || echo "No changes detected by git diff"
-          echo ""
-          
-          echo "4. Is PNG staged?"
-          git diff --cached public/lake_chart.png || echo "Not staged"
-          echo ""
-          
-          echo "5. File information:"
-          ls -lh public/lake_chart.png
-          file public/lake_chart.png
-          md5sum public/lake_chart.png
-          echo ""
-          
-          echo "6. Git index information:"
-          git ls-files --stage public/lake_chart.png
-          echo ""
-          
-          echo "7. Check for .gitattributes:"
-          if [ -f .gitattributes ]; then
-            echo "   .gitattributes exists:"
-            cat .gitattributes
-            echo ""
-            echo "   PNG-related rules:"
-            grep -i png .gitattributes || echo "   No PNG rules"
-          else
-            echo "   No .gitattributes file"
-          fi
-          echo ""
-          
-          echo "8. Check for Git LFS:"
-          if command -v git-lfs &> /dev/null; then
-            echo "   Git LFS is installed"
-            git lfs ls-files | grep -i png || echo "   No PNGs tracked by LFS"
-          else
-            echo "   Git LFS not installed"
-          fi
-          echo ""
-          
-          echo "9. Check .gitignore:"
-          if grep -r "\.png" .gitignore .git/info/exclude 2>/dev/null; then
-            echo "   ⚠ WARNING: Found PNG patterns in ignore files!"
-          else
-            echo "   ✓ No PNG patterns in ignore files"
-          fi
-          echo ""
-          
-          echo "10. File permissions:"
-          stat public/lake_chart.png
-          echo ""
-          
-          echo "========================================="
-          echo "🔍 END DEBUGGING"
-          echo "========================================="
-          echo ""
-      # ============================================================
-      # END DEBUGGING STEP
-      # ============================================================
+          echo "✓ HTML updated to use release URL"
       
-      - name: Force Git to recognize PNG changes
-        run: |
-          echo "=== PREPARING GIT COMMIT ==="
-          
-          # AGGRESSIVE FIX: Multiple strategies
-          git rm -f --cached public/lake_chart.png 2>/dev/null || true
-          git update-index --no-assume-unchanged public/lake_chart.png 2>/dev/null || true
-          git update-index --really-refresh public/lake_chart.png 2>/dev/null || true
-          git rm -r --cached public/ 2>/dev/null || true
-          sleep 2
-          touch public/lake_chart.png
-          
-          echo "=== PNG File Info ==="
-          ls -lh public/lake_chart.png
-          stat public/lake_chart.png 2>/dev/null || stat -f%z public/lake_chart.png
-      
-      - name: Commit files
+      - name: Commit HTML changes only
         run: |
           git config --local user.name "Weather & Lake Bot"
           git config --local user.email "weather-bot@github-actions"
           
           rm -f credentials.json
           
-          echo "=== Adding all files ==="
-          git add -A public/
-          git add -f public/lake_chart.png
-          git add --renormalize public/lake_chart.png 2>/dev/null || true
+          # Only commit HTML files - NO PNG!
+          git add public/index.html
+          git add public/lake.html
           
-          echo ""
-          echo "=== Git Status ==="
-          git status --short
-          
-          echo ""
-          echo "=== Staged Changes ==="
-          git diff --staged --name-status
-          git diff --staged --stat
+          TIMESTAMP=$(date +'%Y-%m-%d %I:%M %p PST')
           
           if git diff --staged --quiet; then
-            echo ""
-            echo "⚠ No changes staged - trying NUCLEAR OPTION"
-            
-            TIMESTAMP=$(date +'%Y-%m-%d %I:%M %p PST')
-            git pull --rebase origin main || true
-            
-            if git commit -a -m "Update lake data & chart - $TIMESTAMP [skip ci]" \
-                           -m "PNG size: $NEW_SIZE bytes" \
-                           -m "Forced commit with -a flag"; then
-              git push || (git pull --rebase origin main && git push)
-              echo "✓ NUCLEAR OPTION succeeded!"
-            else
-              echo "✗ Nothing to commit even with -a flag"
-            fi
+            echo "No HTML changes to commit"
           else
-            echo ""
-            echo "=== Committing Changes ==="
-            TIMESTAMP=$(date +'%Y-%m-%d %I:%M %p PST')
-            
             git pull --rebase origin main || true
-            
-            if [ "$PNG_CHANGED" = "true" ]; then
-              git commit -m "Update lake data & chart - $TIMESTAMP [skip ci]" \
-                         -m "PNG updated: $OLD_SIZE → $NEW_SIZE bytes" \
-                         -m "Hash: $OLD_HASH → $NEW_HASH"
-            else
-              git commit -m "Update lake data & chart - $TIMESTAMP [skip ci]" \
-                         -m "PNG regenerated (size: $NEW_SIZE bytes)"
-            fi
-            
-            git push || (git pull --rebase origin main && git push)
-            echo ""
-            echo "✓ Changes pushed successfully"
+            git commit -m "Update lake data - $TIMESTAMP [skip ci]"
+            git push
+            echo "✓ HTML changes pushed (PNG in release, not in Git)"
           fi
       
       - name: Summary
-        if: always()
         run: |
-          echo ""
           echo "========================================="
-          echo "WORKFLOW SUMMARY"
+          echo "✓ WORKFLOW COMPLETE"
           echo "========================================="
-          echo "Old PNG hash: ${OLD_HASH:-unknown}"
-          echo "New PNG hash: ${NEW_HASH:-unknown}"
-          echo "Old size: ${OLD_SIZE:-0} bytes"
-          echo "New size: ${NEW_SIZE:-0} bytes"
-          echo "PNG changed: ${PNG_CHANGED:-unknown}"
+          echo "PNG Location: GitHub Release (not in Git)"
+          echo "PNG URL: https://github.com/${{ github.repository }}/releases/download/latest-chart/lake_chart.png"
+          echo "HTML files updated in Git"
           echo "========================================="
-      
-      - name: Upload PNG artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: lake-chart-${{ github.run_number }}
-          path: public/lake_chart.png
-          retention-days: 7
