@@ -109,14 +109,27 @@ jobs:
         run: |
           echo "=== PREPARING GIT COMMIT ==="
           
-          # Remove PNG from Git cache to force fresh tracking
-          git rm --cached public/lake_chart.png 2>/dev/null || true
+          # AGGRESSIVE FIX: Multiple strategies to force Git recognition
           
-          # Update Git index
-          git update-index --really-refresh 2>/dev/null || true
+          # Strategy 1: Remove from Git entirely
+          git rm -f --cached public/lake_chart.png 2>/dev/null || true
           
-          # Wait a moment to ensure filesystem operations complete
-          sleep 1
+          # Strategy 2: Update index
+          git update-index --no-assume-unchanged public/lake_chart.png 2>/dev/null || true
+          git update-index --really-refresh public/lake_chart.png 2>/dev/null || true
+          
+          # Strategy 3: Clear ALL Git cache
+          git rm -r --cached public/ 2>/dev/null || true
+          
+          # Strategy 4: Wait for filesystem
+          sleep 2
+          
+          # Strategy 5: Touch the file to update timestamp
+          touch public/lake_chart.png
+          
+          echo "=== PNG File Info ==="
+          ls -lh public/lake_chart.png
+          stat public/lake_chart.png 2>/dev/null || stat -f%z public/lake_chart.png
       
       - name: Commit files
         run: |
@@ -126,13 +139,16 @@ jobs:
           # Clean up credentials
           rm -f credentials.json
           
-          # Add all public files
-          git add public/index.html
-          git add public/lake.html
+          # NUCLEAR OPTION: Add everything in public/ fresh
+          echo "=== Adding all files ==="
+          git add -A public/
           
-          # ALWAYS force add PNG (even if hash didn't change, commit it anyway)
-          echo "Force adding PNG..."
+          # Then FORCE add PNG specifically (even if Git thinks it hasn't changed)
+          echo "Force adding PNG with -f flag..."
           git add -f public/lake_chart.png
+          
+          # Also try adding with --renormalize
+          git add --renormalize public/lake_chart.png 2>/dev/null || true
           
           echo ""
           echo "=== Git Status ==="
@@ -146,7 +162,21 @@ jobs:
           # Check if there are any staged changes
           if git diff --staged --quiet; then
             echo ""
-            echo "⚠ No changes to commit"
+            echo "⚠ No changes staged by git add"
+            echo "⚠ Trying NUCLEAR OPTION: commit -a (all tracked files)"
+            
+            TIMESTAMP=$(date +'%Y-%m-%d %I:%M %p PST')
+            git pull --rebase origin main || true
+            
+            # Commit ALL tracked files regardless of what's staged
+            if git commit -a -m "Update lake data & chart - $TIMESTAMP [skip ci]" \
+                           -m "PNG size: $NEW_SIZE bytes" \
+                           -m "Forced commit with -a flag"; then
+              git push || (git pull --rebase origin main && git push)
+              echo "✓ NUCLEAR OPTION succeeded!"
+            else
+              echo "✗ Nothing to commit even with -a flag"
+            fi
           else
             echo ""
             echo "=== Committing Changes ==="
