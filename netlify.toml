@@ -1,13 +1,10 @@
-# Netlify Configuration File
+# Netlify Configuration File - STATIC SITE ONLY (No Serverless Functions!)
 
 [build]
-  # Directory with the serverless functions
-  functions = "netlify/functions"
-  
-  # Directory to publish (where index.html lives)
+  # Directory to publish (where index.html and assets live)
   publish = "public"
   
-  # Build command (none needed for static site)
+  # Build command (none needed - GitHub Action generates files)
   command = ""
 
 # Redirect rules (optional, for clean URLs)
@@ -25,8 +22,13 @@
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
 
-# Cache weather function responses for 5 minutes
+# Cache static assets
 [[headers]]
-  for = "/.netlify/functions/weather"
+  for = "/*.png"
+  [headers.values]
+    Cache-Control = "public, max-age=3600"
+
+[[headers]]
+  for = "/*.html"
   [headers.values]
     Cache-Control = "public, max-age=300"
