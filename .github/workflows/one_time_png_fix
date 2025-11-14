@@ -21,6 +21,10 @@ jobs:
       
       - name: Fix PNG Git index
         run: |
+          # Configure Git first
+          git config --local user.name "Weather & Lake Bot"
+          git config --local user.email "weather-bot@github-actions"
+          
           echo "========================================="
           echo "FIXING PNG GIT INDEX"
           echo "========================================="
