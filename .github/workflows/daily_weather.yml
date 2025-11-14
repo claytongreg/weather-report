@@ -197,7 +197,7 @@ jobs:
       # Optional: Upload PNG as artifact for debugging
       - name: Upload PNG artifact
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: lake-chart-${{ github.run_number }}
           path: public/lake_chart.png
