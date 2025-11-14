@@ -1,4 +1,4 @@
-name: Daily Birchdale Weather & Lake Report
+name: Daily Birchdale Weather & Lake Report (WITH DEBUGGING)
 
 on:
   schedule:
@@ -28,7 +28,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0  # Get full history for better Git operations
+          fetch-depth: 0
       
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -49,7 +49,6 @@ jobs:
           mkdir -p public
           cp index.html public/index.html
           
-          # Check PNG before generation
           echo "=== BEFORE GENERATION ==="
           if [ -f public/lake_chart.png ]; then
             ls -lh public/lake_chart.png
@@ -83,17 +82,14 @@ jobs:
             echo "NEW_HASH=$NEW_HASH" >> $GITHUB_ENV
             echo "NEW_SIZE=$NEW_SIZE" >> $GITHUB_ENV
             
-            # Check if PNG actually changed
             if [ "$OLD_HASH" != "$NEW_HASH" ]; then
               echo "PNG_CHANGED=true" >> $GITHUB_ENV
               echo "✓ PNG has new data!"
-              echo "  Size change: $OLD_SIZE → $NEW_SIZE bytes"
             else
               echo "PNG_CHANGED=false" >> $GITHUB_ENV
               echo "⚠ PNG unchanged (same hash)"
             fi
             
-            # Verify it's a valid PNG
             if file public/lake_chart.png | grep -q "PNG"; then
               echo "✓ Valid PNG file confirmed"
             else
@@ -105,26 +101,98 @@ jobs:
             exit 1
           fi
       
+      # ============================================================
+      # THIS IS THE NEW DEBUGGING STEP - ADD THIS!
+      # ============================================================
+      - name: 🔍 DEEP PNG DEBUGGING
+        run: |
+          echo ""
+          echo "========================================="
+          echo "🔍 DEEP PNG DEBUGGING"
+          echo "========================================="
+          echo ""
+          
+          echo "1. Git status of PNG:"
+          git status public/lake_chart.png
+          echo ""
+          
+          echo "2. Is PNG tracked by Git?"
+          if git ls-files --error-unmatch public/lake_chart.png 2>/dev/null; then
+            echo "   ✓ YES - PNG is tracked"
+          else
+            echo "   ✗ NO - PNG is NOT tracked!"
+          fi
+          echo ""
+          
+          echo "3. What does Git think changed?"
+          git diff public/lake_chart.png || echo "No changes detected by git diff"
+          echo ""
+          
+          echo "4. Is PNG staged?"
+          git diff --cached public/lake_chart.png || echo "Not staged"
+          echo ""
+          
+          echo "5. File information:"
+          ls -lh public/lake_chart.png
+          file public/lake_chart.png
+          md5sum public/lake_chart.png
+          echo ""
+          
+          echo "6. Git index information:"
+          git ls-files --stage public/lake_chart.png
+          echo ""
+          
+          echo "7. Check for .gitattributes:"
+          if [ -f .gitattributes ]; then
+            echo "   .gitattributes exists:"
+            cat .gitattributes
+            echo ""
+            echo "   PNG-related rules:"
+            grep -i png .gitattributes || echo "   No PNG rules"
+          else
+            echo "   No .gitattributes file"
+          fi
+          echo ""
+          
+          echo "8. Check for Git LFS:"
+          if command -v git-lfs &> /dev/null; then
+            echo "   Git LFS is installed"
+            git lfs ls-files | grep -i png || echo "   No PNGs tracked by LFS"
+          else
+            echo "   Git LFS not installed"
+          fi
+          echo ""
+          
+          echo "9. Check .gitignore:"
+          if grep -r "\.png" .gitignore .git/info/exclude 2>/dev/null; then
+            echo "   ⚠ WARNING: Found PNG patterns in ignore files!"
+          else
+            echo "   ✓ No PNG patterns in ignore files"
+          fi
+          echo ""
+          
+          echo "10. File permissions:"
+          stat public/lake_chart.png
+          echo ""
+          
+          echo "========================================="
+          echo "🔍 END DEBUGGING"
+          echo "========================================="
+          echo ""
+      # ============================================================
+      # END DEBUGGING STEP
+      # ============================================================
+      
       - name: Force Git to recognize PNG changes
         run: |
           echo "=== PREPARING GIT COMMIT ==="
           
-          # AGGRESSIVE FIX: Multiple strategies to force Git recognition
-          
-          # Strategy 1: Remove from Git entirely
+          # AGGRESSIVE FIX: Multiple strategies
           git rm -f --cached public/lake_chart.png 2>/dev/null || true
-          
-          # Strategy 2: Update index
           git update-index --no-assume-unchanged public/lake_chart.png 2>/dev/null || true
           git update-index --really-refresh public/lake_chart.png 2>/dev/null || true
-          
-          # Strategy 3: Clear ALL Git cache
           git rm -r --cached public/ 2>/dev/null || true
-          
-          # Strategy 4: Wait for filesystem
           sleep 2
-          
-          # Strategy 5: Touch the file to update timestamp
           touch public/lake_chart.png
           
           echo "=== PNG File Info ==="
@@ -136,18 +204,11 @@ jobs:
           git config --local user.name "Weather & Lake Bot"
           git config --local user.email "weather-bot@github-actions"
           
-          # Clean up credentials
           rm -f credentials.json
           
-          # NUCLEAR OPTION: Add everything in public/ fresh
           echo "=== Adding all files ==="
           git add -A public/
-          
-          # Then FORCE add PNG specifically (even if Git thinks it hasn't changed)
-          echo "Force adding PNG with -f flag..."
           git add -f public/lake_chart.png
-          
-          # Also try adding with --renormalize
           git add --renormalize public/lake_chart.png 2>/dev/null || true
           
           echo ""
@@ -159,16 +220,13 @@ jobs:
           git diff --staged --name-status
           git diff --staged --stat
           
-          # Check if there are any staged changes
           if git diff --staged --quiet; then
             echo ""
-            echo "⚠ No changes staged by git add"
-            echo "⚠ Trying NUCLEAR OPTION: commit -a (all tracked files)"
+            echo "⚠ No changes staged - trying NUCLEAR OPTION"
             
             TIMESTAMP=$(date +'%Y-%m-%d %I:%M %p PST')
             git pull --rebase origin main || true
             
-            # Commit ALL tracked files regardless of what's staged
             if git commit -a -m "Update lake data & chart - $TIMESTAMP [skip ci]" \
                            -m "PNG size: $NEW_SIZE bytes" \
                            -m "Forced commit with -a flag"; then
@@ -182,10 +240,8 @@ jobs:
             echo "=== Committing Changes ==="
             TIMESTAMP=$(date +'%Y-%m-%d %I:%M %p PST')
             
-            # Pull any remote changes first
             git pull --rebase origin main || true
             
-            # Commit with detailed message
             if [ "$PNG_CHANGED" = "true" ]; then
               git commit -m "Update lake data & chart - $TIMESTAMP [skip ci]" \
                          -m "PNG updated: $OLD_SIZE → $NEW_SIZE bytes" \
@@ -195,7 +251,6 @@ jobs:
                          -m "PNG regenerated (size: $NEW_SIZE bytes)"
             fi
             
-            # Push changes
             git push || (git pull --rebase origin main && git push)
             echo ""
             echo "✓ Changes pushed successfully"
@@ -214,17 +269,7 @@ jobs:
           echo "New size: ${NEW_SIZE:-0} bytes"
           echo "PNG changed: ${PNG_CHANGED:-unknown}"
           echo "========================================="
-          
-          if [ "$PNG_CHANGED" = "true" ]; then
-            echo "✓ PNG was updated with new data"
-          elif [ "$PNG_CHANGED" = "false" ]; then
-            echo "⚠ PNG was regenerated but data unchanged"
-          else
-            echo "? PNG status unknown"
-          fi
-          echo "========================================="
       
-      # Optional: Upload PNG as artifact for debugging
       - name: Upload PNG artifact
         if: always()
         uses: actions/upload-artifact@v4
