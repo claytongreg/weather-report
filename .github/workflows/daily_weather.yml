@@ -131,21 +131,30 @@ jobs:
         run: |
           rm -f credentials.json
           
-          echo "=== CLEARING GIT CACHE FOR PNG ==="
-          # Remove PNG from Git cache to force fresh tracking
-          git rm --cached public/lake_chart.png 2>/dev/null || echo "PNG not in cache"
+          echo "=== VERIFYING PNG EXISTS ==="
+          if [ ! -f public/lake_chart.png ]; then
+            echo "✗ FATAL: PNG doesn't exist before staging!"
+            exit 1
+          fi
+          echo "✓ PNG exists: $(ls -lh public/lake_chart.png)"
           
           echo ""
           echo "=== STAGING FILES ==="
           
-          # Stage all public files
+          # Stage HTML files first
           git add public/index.html
           git add public/lake.html
           
-          # Force add PNG multiple ways
-          git add public/lake_chart.png
+          # For PNG: Just force add it, don't remove from cache
           git add -f public/lake_chart.png
-          git add --force public/lake_chart.png
+          
+          echo ""
+          echo "=== VERIFY PNG STILL EXISTS ==="
+          if [ ! -f public/lake_chart.png ]; then
+            echo "✗ FATAL: PNG was deleted during staging!"
+            exit 1
+          fi
+          echo "✓ PNG still exists"
           
           echo ""
           echo "=== WHAT'S STAGED ==="
@@ -195,14 +204,25 @@ jobs:
           
           # Check if there are changes
           if git diff --cached --quiet; then
-            echo "⚠ No changes to commit (this shouldn't happen)"
-            exit 0
+            echo ""
+            echo "⚠ No changes staged (PNG might be identical to Git version)"
+            echo "Using 'git commit -a' to commit all tracked files"
+            
+            TIMESTAMP=$(date +'%Y-%m-%d %I:%M %p PST')
+            
+            # Commit all tracked files regardless of staging
+            if git commit -a -m "Update lake data & chart - $TIMESTAMP" -m "PNG: $NEW_SIZE bytes | Hash: $NEW_HASH"; then
+              echo "✓ Committed via 'git commit -a'"
+            else
+              echo "⚠ No changes to commit (data unchanged)"
+            fi
+          else
+            echo ""
+            echo "=== COMMITTING STAGED CHANGES ==="
+            TIMESTAMP=$(date +'%Y-%m-%d %I:%M %p PST')
+            git commit -m "Update lake data & chart - $TIMESTAMP" -m "PNG: $NEW_SIZE bytes | Hash: $NEW_HASH"
+            echo "✓ Committed staged changes"
           fi
-          
-          echo ""
-          echo "=== COMMITTING ==="
-          TIMESTAMP=$(date +'%Y-%m-%d %I:%M %p PST')
-          git commit -m "Update lake data & chart - $TIMESTAMP" -m "PNG: $NEW_SIZE bytes | Hash: $NEW_HASH"
           
           echo ""
           echo "=== PUSHING ==="
