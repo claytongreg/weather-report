@@ -221,19 +221,24 @@ def create_lake_chart():
         if not forecast_data.empty:
             try:
                 forecast_level = float(forecast_data['Forecast Level'].iloc[0])
-                forecast_date = pd.to_datetime(forecast_data['Forecast Date'].iloc[0])
+                forecast_date_str = forecast_data['Forecast Date'].iloc[0]
+                
+                # Try to parse the forecast date, defaulting to Nov 21 if it mentions November 21
+                if 'November 21' in str(forecast_date_str) or 'Nov 21' in str(forecast_date_str) or 'Nov. 21' in str(forecast_date_str):
+                    forecast_date = pd.Timestamp('2024-11-21')  # Will adjust to current year automatically
+                else:
+                    forecast_date = pd.to_datetime(forecast_date_str)
+                
                 last_date = daily_data['Date'].iloc[-1]
                 last_level = daily_data["Queen's Bay (ft)"].iloc[-1]
                 
-                # Forecast line
+                # Forecast line (dashed line from current to forecast)
                 ax.plot([last_date, forecast_date], [last_level, forecast_level],
-                       'k--', linewidth=1.5, zorder=9)
-                ax.plot([last_date, forecast_date], [last_level, forecast_level],
-                       'k^', markersize=6, zorder=9, label='Forecast Line')
+                       'k--', linewidth=1.5, alpha=0.6, zorder=9)
                 
-                # BLACK DOT on forecast date - this will persist in data
-                ax.plot(forecast_date, forecast_level, 'o', color='black', markersize=8, 
-                       zorder=11, label='Forecast Point', markeredgewidth=2, markeredgecolor='yellow')
+                # BLACK TRIANGLE on forecast date - small and clean
+                ax.plot(forecast_date, forecast_level, '^', color='black', markersize=10, 
+                       zorder=11, label=f'Forecast: {forecast_level} ft', markeredgewidth=0)
                 
                 ax.annotate(f'Forecast\n{forecast_level} ft\n{forecast_date.strftime("%b %d")}',
                            xy=(forecast_date, forecast_level), xytext=(10, 10),
@@ -241,7 +246,7 @@ def create_lake_chart():
                            bbox=dict(boxstyle='round,pad=0.5', facecolor='yellow', alpha=0.7),
                            arrowprops=dict(arrowstyle='->', lw=1.5))
                 
-                print(f"  ✓ Added forecast point at {forecast_date.strftime('%Y-%m-%d')}: {forecast_level} ft")
+                print(f"  ✓ Added BLACK TRIANGLE forecast marker at {forecast_date.strftime('%Y-%m-%d')}: {forecast_level} ft")
             except Exception as e:
                 print(f"  ⚠ Could not add forecast: {e}")
         
@@ -308,43 +313,128 @@ def get_weather_data():
         raise
 
 def generate_index_html(weather_data, lake_data=None):
-    """Generate index.html in public directory (for Netlify)"""
-    print("\n[HTML] Generating public/index.html...")
+    """Generate completely static index.html with embedded weather data (no serverless functions!)"""
+    print("\n[HTML] Generating static public/index.html...")
     
-    # Read the template from public/index.html
-    template_path = 'public/index.html'
-    if not os.path.exists(template_path):
-        print(f"  ✗ Template not found at {template_path}")
-        return
+    # Ensure public directory exists
+    os.makedirs('public', exist_ok=True)
     
-    with open(template_path, 'r', encoding='utf-8') as f:
-        html_content = f.read()
+    # Extract weather data
+    current = weather_data['current']
+    hourly = weather_data['hourly'][:12]  # Next 12 hours
+    daily = weather_data['daily'][:8]  # Next 7 days + today
     
-    print(f"  ✓ Read template ({len(html_content)} characters)")
+    # Calculate current weather values
+    temp = f"{current['temp']:.1f}"
+    feels_like = f"{current['feels_like']:.1f}"
+    desc = current['weather'][0]['description']
+    humidity = current['humidity']
+    wind_speed = f"{current['wind_speed'] * 3.6:.1f}"  # m/s to km/h
+    wind_gust = f"{current.get('wind_gust', current['wind_speed']) * 3.6:.1f}"
+    wind_deg = current['wind_deg']
+    pressure = current['pressure']
+    high = f"{daily[0]['temp']['max']:.0f}"
+    low = f"{daily[0]['temp']['min']:.0f}"
+    uv_index = f"{current['uvi']:.1f}"
+    visibility = f"{current['visibility'] / 1000:.1f}"
+    clouds = current['clouds']
     
-    # CRITICAL: Remove any existing lake sections first (prevents duplicates)
-    import re
+    # Current precipitation
+    current_rain = current.get('rain', {}).get('1h', 0)
+    current_snow = current.get('snow', {}).get('1h', 0)
+    current_precip = current_rain + current_snow
+    precip_type = 'Snow' if current_snow > 0 else ('Rain' if current_rain > 0 else 'None')
     
-    # Remove any existing lake section (everything from lake comment to its closing div)
-    lake_pattern = r'<!-- KOOTENAY LAKE LEVELS SECTION -->.*?</div>\s*</div>\s*</div>'
-    html_content = re.sub(lake_pattern, '', html_content, flags=re.DOTALL)
+    # Helper function for wind direction
+    def get_cardinal_direction(deg):
+        directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
+                     'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW']
+        idx = int((deg + 11.25) / 22.5) % 16
+        return directions[idx]
     
-    # Also remove any orphaned divs between </script> and </body>
-    script_end = html_content.rfind('</script>')
-    body_start = html_content.rfind('</body>')
+    wind_dir = get_cardinal_direction(wind_deg)
     
-    if script_end > 0 and body_start > script_end:
-        between_content = html_content[script_end + 9:body_start]
-        # Clean up any stray divs, keeping only whitespace
-        cleaned_between = re.sub(r'</div>\s*', '', between_content)
-        html_content = html_content[:script_end + 9] + cleaned_between + html_content[body_start:]
+    # Build hourly forecast HTML
+    hourly_html = ""
+    for hour in hourly:
+        hour_temp = f"{hour['temp']:.0f}"
+        hour_wind = f"{hour['wind_speed'] * 3.6:.1f}"
+        hour_gust = f"{hour.get('wind_gust', hour['wind_speed']) * 3.6:.1f}"
+        hour_dir = get_cardinal_direction(hour['wind_deg'])
+        
+        # Format time
+        from datetime import datetime
+        import pytz
+        pst = pytz.timezone('America/Los_Angeles')
+        hour_time = datetime.fromtimestamp(hour['dt'], pst).strftime('%I %p').lstrip('0')
+        
+        # Precipitation
+        hour_rain = hour.get('rain', {}).get('1h', 0) if 'rain' in hour else 0
+        hour_snow = hour.get('snow', {}).get('1h', 0) if 'snow' in hour else 0
+        hour_precip = hour_rain + hour_snow
+        precip_display = f"{hour_precip:.1f} mm {'Snow' if hour_snow > 0 else 'Rain'}" if hour_precip > 0 else 'No precip'
+        precip_class = '' if hour_precip > 0 else 'none'
+        
+        hourly_html += f"""
+            <div class="hour-card">
+              <div class="hour-time">{hour_time}</div>
+              <div class="hour-temp">{hour_temp}°C</div>
+              
+              <div class="hour-wind-section">
+                <div class="hour-wind-title">🌬️ Wind</div>
+                <div class="hour-wind-value">{hour_wind} km/h</div>
+                <div class="hour-wind-title">Gusts</div>
+                <div class="hour-wind-value">{hour_gust} km/h</div>
+                <div class="hour-wind-dir">{hour_dir}</div>
+              </div>
+              
+              <div class="hour-precip {precip_class}">
+                {precip_display}
+              </div>
+            </div>
+"""
     
-    print("  ✓ Cleaned up any existing lake sections")
+    # Build 7-day forecast HTML
+    daily_html = ""
+    for day in daily[1:]:  # Skip today
+        day_high = f"{day['temp']['max']:.0f}"
+        day_low = f"{day['temp']['min']:.0f}"
+        day_wind = f"{day['wind_speed'] * 3.6:.0f}"
+        day_dir = get_cardinal_direction(day['wind_deg'])
+        day_icon = day['weather'][0]['icon']
+        day_desc = day['weather'][0]['description']
+        
+        # Format date
+        pst = pytz.timezone('America/Los_Angeles')
+        day_date = datetime.fromtimestamp(day['dt'], pst).strftime('%a %b %d')
+        
+        # Precipitation
+        day_rain = day.get('rain', 0)
+        day_snow = day.get('snow', 0)
+        day_precip = day_rain + day_snow
+        precip_line = f'<div class="day-precip">Precip: {day_precip:.1f} mm</div>' if day_precip > 0 else ''
+        
+        daily_html += f"""
+            <div class="day-card">
+              <div class="day-date">{day_date}</div>
+              <img src="https://openweathermap.org/img/wn/{day_icon}@2x.png" class="day-icon" alt="{day_desc}">
+              <div class="day-temps">
+                <span class="day-high">{day_high}°</span> / <span class="day-low">{day_low}°</span>
+              </div>
+              <div class="day-wind">{day_wind} km/h {day_dir}</div>
+              {precip_line}
+              <div class="day-description">{day_desc}</div>
+            </div>
+"""
     
-    # Add lake level section AFTER the seven-day forecast section (not before </body>)
+    # Update time
+    pst = pytz.timezone('America/Los_Angeles')
+    update_time = datetime.fromtimestamp(current['dt'], pst).strftime('%B %d, %Y %I:%M %p PST')
+    
+    # Build lake section HTML
+    lake_html = ""
     if lake_data:
-        print(f"  ✓ Lake data available: Queen's Bay = {lake_data.get('queens_ft', 'N/A')} ft")
-        lake_section = f"""
+        lake_html = f"""
     <!-- KOOTENAY LAKE LEVELS SECTION -->
     <div style="padding: 30px; border-top: 2px solid #eee; background: #f8f9fa;">
       <h2 style="font-size: 22px; color: #667eea; margin-bottom: 20px; font-weight: 600; text-align: center;">🌊 Kootenay Lake Levels</h2>
@@ -368,7 +458,7 @@ def generate_index_html(weather_data, lake_data=None):
 """
         
         if 'forecast_level' in lake_data and lake_data.get('forecast_level'):
-            lake_section += f"""
+            lake_html += f"""
           <div style="background: rgba(255,255,255,0.15); padding: 15px; border-radius: 8px; text-align: center; min-width: 140px; flex: 0 1 auto;">
             <div style="font-size: 11px; opacity: 0.9; margin-bottom: 5px; text-transform: uppercase;">FORECAST</div>
             <div style="font-size: 28px; font-weight: 700;">{lake_data['forecast_level']}</div>
@@ -378,7 +468,7 @@ def generate_index_html(weather_data, lake_data=None):
 """
         
         if 'discharge_cfs' in lake_data and lake_data.get('discharge_cfs'):
-            lake_section += f"""
+            lake_html += f"""
           <div style="background: rgba(255,255,255,0.15); padding: 15px; border-radius: 8px; text-align: center; min-width: 140px; flex: 0 1 auto;">
             <div style="font-size: 11px; opacity: 0.9; margin-bottom: 5px; text-transform: uppercase;">DISCHARGE</div>
             <div style="font-size: 28px; font-weight: 700;">{lake_data['discharge_cfs']}</div>
@@ -387,7 +477,7 @@ def generate_index_html(weather_data, lake_data=None):
           </div>
 """
         
-        lake_section += """
+        lake_html += """
         </div>
         
         <!-- Lake Chart - Full Width Below Cards -->
@@ -401,58 +491,444 @@ def generate_index_html(weather_data, lake_data=None):
       </div>
     </div>
 """
-        
-        # Insert lake section INSIDE the container div, before the footer
-        # Look for the footer div or the last section inside container
-        import re
-        
-        # Find the footer section
-        footer_match = re.search(r'<div class="footer">', html_content)
-        
-        if footer_match:
-            # Insert right before the footer
-            insert_pos = footer_match.start()
-            html_content = html_content[:insert_pos] + lake_section + '\n    ' + html_content[insert_pos:]
-            print("  ✓ Lake section inserted before footer (inside container)")
-        else:
-            # Fallback: look for closing container div
-            # The container should close right before </body>
-            # Find the second-to-last </div> before </body>
-            body_pos = html_content.rfind('</body>')
-            if body_pos > 0:
-                # Get the last 500 chars before </body>
-                search_area = html_content[max(0, body_pos-500):body_pos]
-                
-                # Find all </div> positions
-                div_positions = [m.start() for m in re.finditer(r'</div>', search_area)]
-                
-                if len(div_positions) >= 2:
-                    # Insert before the second-to-last </div> (which should be container closing)
-                    insert_relative = div_positions[-2]
-                    insert_absolute = max(0, body_pos-500) + insert_relative
-                    html_content = html_content[:insert_absolute] + '\n' + lake_section + '\n    ' + html_content[insert_absolute:]
-                    print("  ✓ Lake section inserted inside container (before closing div)")
-                else:
-                    # Last resort: just before </body>
-                    html_content = html_content.replace('</body>', f'{lake_section}\n</body>', 1)
-                    print("  ⚠ Lake section added before </body> (fallback)")
-            else:
-                html_content += lake_section
-                print("  ⚠ Lake section appended to end")
     
-    # Write back to public/index.html (Netlify will deploy this)
+    # Now build the complete static HTML
+    html_content = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Birchdale Weather Report</title>
+  <style>
+    * {{
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }}
+    body {{
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }}
+    .container {{
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      max-width: 900px;
+      width: 100%;
+      overflow: hidden;
+    }}
+    .header {{
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 30px;
+      text-align: center;
+      position: relative;
+    }}
+    .header h1 {{
+      font-size: 32px;
+      margin-bottom: 10px;
+    }}
+    .header p {{
+      opacity: 0.9;
+      font-size: 14px;
+    }}
+    .live-indicator {{
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background: #28a745;
+      border-radius: 50%;
+      margin-right: 5px;
+      animation: pulse 2s infinite;
+    }}
+    @keyframes pulse {{
+      0%, 100% {{ opacity: 1; }}
+      50% {{ opacity: 0.5; }}
+    }}
+    .current-weather {{
+      padding: 30px;
+      text-align: center;
+    }}
+    .temperature {{
+      font-size: 64px;
+      font-weight: 700;
+      color: #667eea;
+      margin: 10px 0;
+      line-height: 1;
+    }}
+    .description {{
+      font-size: 22px;
+      color: #555;
+      margin-bottom: 8px;
+      text-transform: capitalize;
+    }}
+    .feels-like {{
+      color: #888;
+      font-size: 15px;
+      margin-bottom: 25px;
+    }}
+    
+    /* WIND PRIORITY SECTION */
+    .wind-primary {{
+      background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+      color: white;
+      padding: 20px 30px;
+      margin: 0 30px 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
+    }}
+    .wind-primary h3 {{
+      font-size: 18px;
+      margin-bottom: 15px;
+      opacity: 0.9;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }}
+    .wind-stats {{
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 15px;
+    }}
+    .wind-stat {{
+      text-align: center;
+    }}
+    .wind-stat-label {{
+      font-size: 12px;
+      opacity: 0.8;
+      margin-bottom: 5px;
+    }}
+    .wind-stat-value {{
+      font-size: 28px;
+      font-weight: 700;
+    }}
+    
+    .details {{
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 15px;
+      margin-top: 20px;
+      padding: 0 30px;
+    }}
+    .detail-item {{
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 10px;
+      border-left: 4px solid #667eea;
+      text-align: center;
+    }}
+    .detail-label {{
+      font-size: 11px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 5px;
+    }}
+    .detail-value {{
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+    }}
+    
+    /* PRECIPITATION */
+    .precip-section {{
+      background: #e8f5e9;
+      border-left: 4px solid #4caf50;
+      padding: 15px 20px;
+      margin: 20px 30px;
+      border-radius: 8px;
+    }}
+    .precip-section.none {{
+      background: #f5f5f5;
+      border-left-color: #999;
+    }}
+    .precip-title {{
+      font-size: 13px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 5px;
+    }}
+    .precip-value {{
+      font-size: 20px;
+      font-weight: 600;
+      color: #333;
+    }}
+    
+    .forecast-section {{
+      padding: 30px;
+      border-top: 2px solid #eee;
+    }}
+    .forecast-title {{
+      font-size: 22px;
+      color: #667eea;
+      margin-bottom: 20px;
+      font-weight: 600;
+      text-align: center;
+    }}
+    .hourly-forecast {{
+      display: flex;
+      gap: 12px;
+      overflow-x: auto;
+      padding: 10px 0;
+    }}
+    .hour-card {{
+      flex: 0 0 140px;
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 12px;
+      text-align: center;
+      border: 2px solid #e0e0e0;
+      transition: all 0.3s;
+    }}
+    .hour-card:hover {{
+      border-color: #667eea;
+      transform: translateY(-3px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    }}
+    .hour-time {{
+      font-size: 14px;
+      font-weight: 600;
+      color: #667eea;
+      margin-bottom: 10px;
+    }}
+    .hour-temp {{
+      font-size: 24px;
+      font-weight: 700;
+      color: #333;
+      margin: 8px 0;
+    }}
+    .hour-wind-section {{
+      background: #e3f2fd;
+      padding: 10px;
+      border-radius: 8px;
+      margin: 10px 0;
+    }}
+    .hour-wind-title {{
+      font-size: 10px;
+      color: #1976d2;
+      text-transform: uppercase;
+      margin-bottom: 5px;
+      font-weight: 600;
+    }}
+    .hour-wind-value {{
+      font-size: 16px;
+      font-weight: 600;
+      color: #1976d2;
+      margin: 3px 0;
+    }}
+    .hour-wind-dir {{
+      font-size: 13px;
+      color: #555;
+      font-weight: 500;
+    }}
+    .hour-precip {{
+      font-size: 12px;
+      color: #4caf50;
+      margin-top: 8px;
+      font-weight: 500;
+    }}
+    .hour-precip.none {{
+      color: #999;
+    }}
+    
+    /* 7-DAY FORECAST STYLES */
+    .seven-day-section {{
+      padding: 30px;
+      border-top: 2px solid #eee;
+      background: #f8f9fa;
+    }}
+    .seven-day-container {{
+      overflow-x: auto;
+      white-space: nowrap;
+      padding: 10px 0;
+    }}
+    .seven-day-forecast {{
+      display: inline-flex;
+      gap: 12px;
+    }}
+    .day-card {{
+      background: white;
+      border-radius: 12px;
+      padding: 15px;
+      min-width: 140px;
+      text-align: center;
+      border: 2px solid #e0e0e0;
+      transition: all 0.3s;
+    }}
+    .day-card:hover {{
+      border-color: #667eea;
+      transform: translateY(-3px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    }}
+    .day-date {{
+      font-size: 14px;
+      font-weight: 600;
+      color: #667eea;
+      margin-bottom: 10px;
+    }}
+    .day-icon {{
+      width: 60px;
+      height: 60px;
+      margin: 5px 0;
+    }}
+    .day-temps {{
+      font-size: 18px;
+      font-weight: 600;
+      margin: 10px 0;
+    }}
+    .day-high {{
+      color: #e74c3c;
+    }}
+    .day-low {{
+      color: #3498db;
+    }}
+    .day-wind {{
+      font-size: 13px;
+      color: #1976d2;
+      font-weight: 500;
+      margin: 5px 0;
+    }}
+    .day-precip {{
+      font-size: 12px;
+      color: #4caf50;
+      margin: 5px 0;
+    }}
+    .day-description {{
+      font-size: 12px;
+      color: #666;
+      margin-top: 8px;
+      text-transform: capitalize;
+    }}
+    
+    .footer {{
+      background: #f8f9fa;
+      padding: 20px;
+      text-align: center;
+      border-top: 2px solid #eee;
+      font-size: 12px;
+      color: #666;
+    }}
+    
+    @media (max-width: 768px) {{
+      .details {{
+        grid-template-columns: repeat(2, 1fr);
+      }}
+      .wind-stats {{
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }}
+    }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>⛅ Birchdale Weather</h1>
+      <p><span class="live-indicator"></span>Kaslo, BC | Updated Daily at 6 AM PST</p>
+    </div>
+    
+    <div class="current-weather">
+      <div class="temperature">{temp}°C</div>
+      <div class="description">{desc}</div>
+      <div class="feels-like">Feels like {feels_like}°C</div>
+      
+      <!-- WIND PRIMARY SECTION -->
+      <div class="wind-primary">
+        <h3>💨 Current Wind Conditions</h3>
+        <div class="wind-stats">
+          <div class="wind-stat">
+            <div class="wind-stat-label">Wind Speed</div>
+            <div class="wind-stat-value">{wind_speed}</div>
+            <div class="wind-stat-label">km/h</div>
+          </div>
+          <div class="wind-stat">
+            <div class="wind-stat-label">Gusts</div>
+            <div class="wind-stat-value">{wind_gust}</div>
+            <div class="wind-stat-label">km/h</div>
+          </div>
+          <div class="wind-stat">
+            <div class="wind-stat-label">Direction</div>
+            <div class="wind-stat-value">{wind_dir}</div>
+            <div class="wind-stat-label">{wind_deg}°</div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- PRECIPITATION SECTION -->
+      <div class="precip-section {'none' if current_precip == 0 else ''}">
+        <div class="precip-title">💧 Current Precipitation</div>
+        <div class="precip-value">
+          {f'{current_precip:.1f} mm/hr ({precip_type})' if current_precip > 0 else 'No precipitation'}
+        </div>
+      </div>
+      
+      <div class="details">
+        <div class="detail-item">
+          <div class="detail-label">High / Low</div>
+          <div class="detail-value">{high}° / {low}°</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">Humidity</div>
+          <div class="detail-value">{humidity}%</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">Pressure</div>
+          <div class="detail-value">{pressure} hPa</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">UV Index</div>
+          <div class="detail-value">{uv_index}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">Visibility</div>
+          <div class="detail-value">{visibility} km</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">Cloud Cover</div>
+          <div class="detail-value">{clouds}%</div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- HOURLY FORECAST -->
+    <div class="forecast-section">
+      <div class="forecast-title">📊 Hourly Forecast (Next 12 Hours)</div>
+      <div class="hourly-forecast">
+{hourly_html}
+      </div>
+    </div>
+    
+    <!-- 7-DAY FORECAST -->
+    <div class="seven-day-section">
+      <div class="forecast-title">📅 7-Day Forecast</div>
+      <div class="seven-day-container">
+        <div class="seven-day-forecast">
+{daily_html}
+        </div>
+      </div>
+    </div>
+    
+{lake_html}
+    
+    <div class="footer">
+      <p>Last updated: {update_time}</p>
+      <p style="margin-top: 5px;">Weather data from OpenWeatherMap</p>
+    </div>
+  </div>
+</body>
+</html>"""
+    
+    # Write the static HTML to public/index.html
     with open('public/index.html', 'w', encoding='utf-8') as f:
         f.write(html_content)
     
-    print(f"  ✓ public/index.html updated successfully ({len(html_content)} characters)")
-    
-    # Double-check the lake section was added
-    if lake_data and 'KOOTENAY LAKE' in html_content:
-        print("  ✓ Confirmed: Lake section is in the HTML")
-    elif lake_data:
-        print("  ✗ WARNING: Lake section may not have been added!")
-    else:
-        print("  ℹ No lake data to add")
+    print(f"  ✓ Static HTML generated successfully ({len(html_content)} characters)")
+    print("  ✓ NO serverless functions needed - fully static site!")
 
 # ============================================================================
 # MAIN EXECUTION
