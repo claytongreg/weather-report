@@ -1,8 +1,8 @@
-name: Daily Birchdale Weather & Lake Report (FORCE FRESH PNG)
+name: Daily Birchdale Weather & Lake Report
 
 on:
   schedule:
-    - cron: '0 13 * * *'  # 6 AM PST daily
+    - cron: '0 13 * * *'
   workflow_dispatch:
 
 permissions:
@@ -13,208 +13,34 @@ jobs:
     runs-on: ubuntu-latest
     
     env:
-      EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
-      EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
-      EMAIL_TO: ${{ secrets.EMAIL_TO }}
-      TWILIO_SID: ${{ secrets.TWILIO_SID }}
-      TWILIO_TOKEN: ${{ secrets.TWILIO_TOKEN }}
-      TWILIO_PHONE: ${{ secrets.TWILIO_PHONE }}
       OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
       LAKE_SPREADSHEET_ID: ${{ secrets.LAKE_SPREADSHEET_ID }}
       GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
     
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v4
       
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests twilio pytz beautifulsoup4 pandas matplotlib python-dateutil google-auth google-auth-oauthlib google-api-python-client
+        run: pip install requests pytz beautifulsoup4 pandas matplotlib python-dateutil google-auth google-auth-oauthlib google-api-python-client
       
-      - name: Setup Google Credentials
-        run: |
-          echo "$GOOGLE_CREDENTIALS_JSON" | base64 -d > credentials.json
+      - name: Setup credentials
+        run: echo "$GOOGLE_CREDENTIALS_JSON" | base64 -d > credentials.json
       
-      - name: Prepare public directory and DELETE old PNG
+      - name: Prepare and run
         run: |
           mkdir -p public
           cp index.html public/index.html
-          
-          # CRITICAL: Delete old PNG completely
-          if [ -f public/lake_chart.png ]; then
-            OLD_SIZE=$(stat -c%s public/lake_chart.png 2>/dev/null || stat -f%z public/lake_chart.png)
-            rm -f public/lake_chart.png
-            echo "✓ Deleted old PNG ($OLD_SIZE bytes)"
-          else
-            echo "ℹ No old PNG to delete"
-          fi
-          
-          # Verify it's gone
-          if [ -f public/lake_chart.png ]; then
-            echo "✗ ERROR: PNG still exists after deletion!"
-            exit 1
-          else
-            echo "✓ Confirmed: PNG deleted"
-          fi
-      
-      - name: Run lake monitoring script
-        run: |
-          echo "=== GENERATING FRESH FILES ==="
           python main.py
-          echo "=== GENERATION COMPLETE ==="
       
-      - name: Verify NEW PNG was created
+      - name: Commit everything
         run: |
-          echo "=== VERIFYING NEW PNG ==="
-          
-          if [ ! -f public/lake_chart.png ]; then
-            echo "✗ ERROR: PNG was not created!"
-            exit 1
-          fi
-          
-          NEW_SIZE=$(stat -c%s public/lake_chart.png 2>/dev/null || stat -f%z public/lake_chart.png)
-          NEW_HASH=$(md5sum public/lake_chart.png | cut -d' ' -f1)
-          
-          echo "✓ New PNG exists"
-          echo "  Size: $NEW_SIZE bytes"
-          echo "  Hash: $NEW_HASH"
-          
-          # Check if PNG changed from what's in Git
-          echo ""
-          echo "=== COMPARING WITH GIT VERSION ==="
-          
-          if git ls-files --error-unmatch public/lake_chart.png 2>/dev/null; then
-            # PNG is tracked, compare with Git version
-            git show HEAD:public/lake_chart.png > /tmp/old_png.png 2>/dev/null || echo "No previous version"
-            
-            if [ -f /tmp/old_png.png ]; then
-              OLD_HASH=$(md5sum /tmp/old_png.png | cut -d' ' -f1)
-              echo "Old PNG hash: $OLD_HASH"
-              echo "New PNG hash: $NEW_HASH"
-              
-              if [ "$OLD_HASH" = "$NEW_HASH" ]; then
-                echo "⚠ WARNING: PNG is IDENTICAL to Git version!"
-                echo "This means the PNG data hasn't actually changed"
-                echo "Touching file to force Git to see it as modified..."
-                
-                # Force file to be seen as changed
-                touch public/lake_chart.png
-                sleep 1
-                
-                echo "✓ File touched - Git should now see it as modified"
-              else
-                echo "✓ PNG is DIFFERENT from Git version - will be staged"
-              fi
-            fi
-          else
-            echo "✓ PNG not in Git yet - will be added"
-          fi
-          
-          # Store for comparison
-          echo "NEW_SIZE=$NEW_SIZE" >> $GITHUB_ENV
-          echo "NEW_HASH=$NEW_HASH" >> $GITHUB_ENV
-      
-      - name: Configure Git
-        run: |
-          git config --global user.name "Weather & Lake Bot"
-          git config --global user.email "weather-bot@github-actions"
-      
-      - name: Commit with verification
-        run: |
+          git config --global user.name "Bot"
+          git config --global user.email "bot@github.com"
           rm -f credentials.json
-          
-          echo "=== VERIFYING PNG EXISTS ==="
-          if [ ! -f public/lake_chart.png ]; then
-            echo "✗ FATAL: PNG doesn't exist before staging!"
-            exit 1
-          fi
-          echo "✓ PNG exists: $(ls -lh public/lake_chart.png)"
-          
-          echo ""
-          echo "=== STAGING FILES ==="
-          
-          # Stage HTML files first
-          git add public/index.html
-          git add public/lake.html
-          
-          # For PNG: Just force add it, don't remove from cache
-          git add -f public/lake_chart.png
-          
-          echo ""
-          echo "=== VERIFY PNG STILL EXISTS ==="
-          if [ ! -f public/lake_chart.png ]; then
-            echo "✗ FATAL: PNG was deleted during staging!"
-            exit 1
-          fi
-          echo "✓ PNG still exists"
-          
-          echo ""
-          echo "=== WHAT'S STAGED ==="
-          git diff --cached --name-status
-          git diff --cached --stat
-          
-          echo ""
-          echo "=== CHECKING PNG IN GIT ==="
-          if git ls-files --error-unmatch public/lake_chart.png 2>/dev/null; then
-            echo "✓ PNG is tracked by Git"
-          else
-            echo "⚠ PNG not tracked - will be added as new file"
-          fi
-          
-          # Check if there are changes
-          if git diff --cached --quiet; then
-            echo ""
-            echo "⚠ No changes staged (PNG might be identical to Git version)"
-            echo "Using 'git commit -a' to commit all tracked files"
-            
-            TIMESTAMP=$(date +'%Y-%m-%d %I:%M %p PST')
-            
-            # Commit all tracked files regardless of staging
-            if git commit -a -m "Update lake data & chart - $TIMESTAMP" -m "PNG: $NEW_SIZE bytes | Hash: $NEW_HASH"; then
-              echo "✓ Committed via 'git commit -a'"
-            else
-              echo "⚠ No changes to commit (data unchanged)"
-            fi
-          else
-            echo ""
-            echo "=== COMMITTING STAGED CHANGES ==="
-            TIMESTAMP=$(date +'%Y-%m-%d %I:%M %p PST')
-            git commit -m "Update lake data & chart - $TIMESTAMP" -m "PNG: $NEW_SIZE bytes | Hash: $NEW_HASH"
-            echo "✓ Committed staged changes"
-          fi
-          
-          echo ""
-          echo "=== PUSHING ==="
+          git add public/
+          git commit -am "Update $(date +'%Y-%m-%d %H:%M')" || echo "No changes"
           git push
-          
-          echo ""
-          echo "✓✓✓ COMMIT SUCCESSFUL ✓✓✓"
-          echo "PNG in this commit: $NEW_HASH"
-      
-      - name: Wait for Git to propagate
-        run: |
-          echo "Waiting 5 seconds for Git to fully propagate..."
-          sleep 5
-          echo "✓ Ready for Netlify to deploy"
-      
-      - name: Summary
-        if: always()
-        run: |
-          echo ""
-          echo "========================================="
-          echo "WORKFLOW COMPLETE"
-          echo "========================================="
-          echo "PNG Hash: ${NEW_HASH:-unknown}"
-          echo "PNG Size: ${NEW_SIZE:-unknown} bytes"
-          echo ""
-          echo "Netlify should now deploy with the FRESH PNG"
-          echo "Check commit on GitHub to verify PNG is included"
-          echo "========================================="
