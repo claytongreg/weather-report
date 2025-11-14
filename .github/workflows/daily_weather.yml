@@ -2,7 +2,7 @@ name: Daily Birchdale Weather & Lake Report
 
 on:
   schedule:
-    - cron: '0 13 * * *'
+    - cron: '0 13 * * *'  # 6 AM PST daily
   workflow_dispatch:
 
 permissions:
@@ -28,6 +28,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0  # Get full history for better Git operations
       
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -48,75 +49,156 @@ jobs:
           mkdir -p public
           cp index.html public/index.html
           
-          # Save hash of old PNG
+          # Check PNG before generation
+          echo "=== BEFORE GENERATION ==="
           if [ -f public/lake_chart.png ]; then
+            ls -lh public/lake_chart.png
             OLD_HASH=$(md5sum public/lake_chart.png | cut -d' ' -f1)
+            OLD_SIZE=$(stat -c%s public/lake_chart.png 2>/dev/null || stat -f%z public/lake_chart.png)
             echo "Old PNG hash: $OLD_HASH"
+            echo "Old PNG size: $OLD_SIZE bytes"
             echo "OLD_HASH=$OLD_HASH" >> $GITHUB_ENV
+            echo "OLD_SIZE=$OLD_SIZE" >> $GITHUB_ENV
           else
+            echo "No existing PNG found"
             echo "OLD_HASH=none" >> $GITHUB_ENV
+            echo "OLD_SIZE=0" >> $GITHUB_ENV
           fi
       
       - name: Run lake monitoring script
-        run: python main.py
-      
-      - name: Check if PNG changed
         run: |
+          echo "=== RUNNING MAIN.PY ==="
+          python main.py
+          echo "=== MAIN.PY COMPLETED ==="
+      
+      - name: Verify PNG after generation
+        run: |
+          echo "=== AFTER GENERATION ==="
           if [ -f public/lake_chart.png ]; then
+            ls -lh public/lake_chart.png
             NEW_HASH=$(md5sum public/lake_chart.png | cut -d' ' -f1)
+            NEW_SIZE=$(stat -c%s public/lake_chart.png 2>/dev/null || stat -f%z public/lake_chart.png)
             echo "New PNG hash: $NEW_HASH"
+            echo "New PNG size: $NEW_SIZE bytes"
             echo "NEW_HASH=$NEW_HASH" >> $GITHUB_ENV
+            echo "NEW_SIZE=$NEW_SIZE" >> $GITHUB_ENV
             
+            # Check if PNG actually changed
             if [ "$OLD_HASH" != "$NEW_HASH" ]; then
               echo "PNG_CHANGED=true" >> $GITHUB_ENV
               echo "✓ PNG has new data!"
+              echo "  Size change: $OLD_SIZE → $NEW_SIZE bytes"
             else
               echo "PNG_CHANGED=false" >> $GITHUB_ENV
               echo "⚠ PNG unchanged (same hash)"
             fi
+            
+            # Verify it's a valid PNG
+            if file public/lake_chart.png | grep -q "PNG"; then
+              echo "✓ Valid PNG file confirmed"
+            else
+              echo "✗ WARNING: File may not be valid PNG!"
+              file public/lake_chart.png
+            fi
+          else
+            echo "✗ ERROR: PNG was not created!"
+            exit 1
           fi
+      
+      - name: Force Git to recognize PNG changes
+        run: |
+          echo "=== PREPARING GIT COMMIT ==="
+          
+          # Remove PNG from Git cache to force fresh tracking
+          git rm --cached public/lake_chart.png 2>/dev/null || true
+          
+          # Update Git index
+          git update-index --really-refresh 2>/dev/null || true
+          
+          # Wait a moment to ensure filesystem operations complete
+          sleep 1
       
       - name: Commit files
         run: |
           git config --local user.name "Weather & Lake Bot"
           git config --local user.email "weather-bot@github-actions"
           
+          # Clean up credentials
           rm -f credentials.json
           
-          # Add all files
+          # Add all public files
           git add public/index.html
           git add public/lake.html
           
-          # If PNG changed, force add it
-          if [ "$PNG_CHANGED" = "true" ]; then
-            echo "Force adding PNG (it changed)"
-            git add -f public/lake_chart.png
-          else
-            echo "PNG unchanged, but adding anyway"
-            git add public/lake_chart.png
-          fi
+          # ALWAYS force add PNG (even if hash didn't change, commit it anyway)
+          echo "Force adding PNG..."
+          git add -f public/lake_chart.png
           
-          echo "=== Git status ==="
+          echo ""
+          echo "=== Git Status ==="
           git status --short
           
-          echo "=== Files staged ==="
+          echo ""
+          echo "=== Staged Changes ==="
           git diff --staged --name-status
+          git diff --staged --stat
           
+          # Check if there are any staged changes
           if git diff --staged --quiet; then
-            echo "No changes to commit"
+            echo ""
+            echo "⚠ No changes to commit"
           else
+            echo ""
+            echo "=== Committing Changes ==="
+            TIMESTAMP=$(date +'%Y-%m-%d %I:%M %p PST')
+            
+            # Pull any remote changes first
             git pull --rebase origin main || true
-            git commit -m "Update lake data & chart - $(date +'%Y-%m-%d %I:%M %p PST') [skip ci]"
+            
+            # Commit with detailed message
+            if [ "$PNG_CHANGED" = "true" ]; then
+              git commit -m "Update lake data & chart - $TIMESTAMP [skip ci]" \
+                         -m "PNG updated: $OLD_SIZE → $NEW_SIZE bytes" \
+                         -m "Hash: $OLD_HASH → $NEW_HASH"
+            else
+              git commit -m "Update lake data & chart - $TIMESTAMP [skip ci]" \
+                         -m "PNG regenerated (size: $NEW_SIZE bytes)"
+            fi
+            
+            # Push changes
             git push || (git pull --rebase origin main && git push)
-            echo "✓ Pushed to repo"
+            echo ""
+            echo "✓ Changes pushed successfully"
           fi
       
       - name: Summary
-        if: success()
+        if: always()
         run: |
+          echo ""
           echo "========================================="
-          echo "Workflow completed!"
-          echo "Old PNG hash: $OLD_HASH"
-          echo "New PNG hash: $NEW_HASH"
-          echo "PNG changed: $PNG_CHANGED"
+          echo "WORKFLOW SUMMARY"
           echo "========================================="
+          echo "Old PNG hash: ${OLD_HASH:-unknown}"
+          echo "New PNG hash: ${NEW_HASH:-unknown}"
+          echo "Old size: ${OLD_SIZE:-0} bytes"
+          echo "New size: ${NEW_SIZE:-0} bytes"
+          echo "PNG changed: ${PNG_CHANGED:-unknown}"
+          echo "========================================="
+          
+          if [ "$PNG_CHANGED" = "true" ]; then
+            echo "✓ PNG was updated with new data"
+          elif [ "$PNG_CHANGED" = "false" ]; then
+            echo "⚠ PNG was regenerated but data unchanged"
+          else
+            echo "? PNG status unknown"
+          fi
+          echo "========================================="
+      
+      # Optional: Upload PNG as artifact for debugging
+      - name: Upload PNG artifact
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: lake-chart-${{ github.run_number }}
+          path: public/lake_chart.png
+          retention-days: 7
