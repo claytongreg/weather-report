@@ -1,4 +1,4 @@
-name: Daily Birchdale Weather & Lake Report (SIMPLE - PNG IN GIT)
+name: Daily Birchdale Weather & Lake Report
 
 on:
   schedule:
@@ -49,27 +49,84 @@ jobs:
           cp index.html public/index.html
       
       - name: Run lake monitoring script
-        run: python main.py
+        run: |
+          echo "=== GENERATING FILES ==="
+          python main.py
+          echo "=== GENERATION COMPLETE ==="
       
-      - name: Commit and push (SIMPLE VERSION)
+      - name: Verify files exist
+        run: |
+          echo "=== VERIFYING FILES ==="
+          ls -lh public/
+          
+          if [ -f public/lake_chart.png ]; then
+            echo "✓ PNG exists: $(stat -c%s public/lake_chart.png 2>/dev/null || stat -f%z public/lake_chart.png) bytes"
+          else
+            echo "✗ PNG missing!"
+            exit 1
+          fi
+          
+          if [ -f public/lake.html ]; then
+            echo "✓ HTML exists"
+          else
+            echo "✗ HTML missing!"
+            exit 1
+          fi
+      
+      - name: Single atomic commit
         run: |
           git config --global user.name "Weather & Lake Bot"
           git config --global user.email "weather-bot@github-actions"
           
+          # Clean up credentials
           rm -f credentials.json
           
-          # Just add everything and commit
-          git add public/
+          echo "=== STAGING ALL FILES ATOMICALLY ==="
           
+          # Stage ALL files in public/ at once
+          git add public/index.html
+          git add public/lake.html
+          git add public/lake_chart.png
+          
+          # Verify everything is staged
+          echo ""
+          echo "=== STAGED FILES ==="
+          git diff --cached --name-status
+          
+          # Count staged files
+          STAGED_COUNT=$(git diff --cached --name-only | wc -l)
+          echo ""
+          echo "Files staged: $STAGED_COUNT"
+          
+          if [ "$STAGED_COUNT" -eq 0 ]; then
+            echo "⚠ No changes to commit"
+            exit 0
+          fi
+          
+          # Single commit with ALL changes
           TIMESTAMP=$(date +'%Y-%m-%d %I:%M %p PST')
           
-          # Use commit -a to catch all changes
-          git commit -am "Update lake data & chart - $TIMESTAMP [skip ci]" || echo "No changes"
+          echo ""
+          echo "=== COMMITTING ==="
+          git commit -m "Update lake data & chart - $TIMESTAMP [skip ci]"
           
-          git push origin main || echo "Push failed"
+          # Push once
+          echo ""
+          echo "=== PUSHING ==="
+          git push
+          
+          echo ""
+          echo "✓ Single atomic commit completed!"
+          echo "✓ All files committed together - no race condition"
       
       - name: Summary
+        if: always()
         run: |
+          echo ""
           echo "========================================="
-          echo "Workflow completed"
+          echo "WORKFLOW COMPLETE"
+          echo "========================================="
+          echo "✓ Files generated"
+          echo "✓ Single atomic commit (prevents Netlify race)"
+          echo "✓ Netlify will deploy once with all files"
           echo "========================================="
