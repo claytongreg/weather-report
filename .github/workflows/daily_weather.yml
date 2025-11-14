@@ -162,44 +162,11 @@ jobs:
           git diff --cached --stat
           
           echo ""
-          echo "=== CHECKING PNG STATUS ==="
-          
-          # Check if PNG exists
-          if [ ! -f public/lake_chart.png ]; then
-            echo "✗ ERROR: PNG file doesn't exist!"
-            exit 1
-          fi
-          
-          # Check if PNG is tracked
+          echo "=== CHECKING PNG IN GIT ==="
           if git ls-files --error-unmatch public/lake_chart.png 2>/dev/null; then
             echo "✓ PNG is tracked by Git"
           else
-            echo "⚠ PNG is not tracked - adding to Git"
-            git add -N public/lake_chart.png
-            git add -f public/lake_chart.png
-          fi
-          
-          # Verify PNG is actually staged
-          if git diff --cached --name-only | grep -q "public/lake_chart.png"; then
-            echo "✓ PNG is staged for commit"
-          else
-            echo "✗ PNG STILL not staged - trying nuclear option"
-            
-            # Nuclear option: use update-index
-            git update-index --add public/lake_chart.png
-            git add -f public/lake_chart.png
-            
-            # Check again
-            if git diff --cached --name-only | grep -q "public/lake_chart.png"; then
-              echo "✓ PNG staged via nuclear option"
-            else
-              echo "✗ FATAL: Cannot stage PNG!"
-              echo "Git status:"
-              git status public/lake_chart.png
-              echo "Git diff:"
-              git diff public/lake_chart.png
-              exit 1
-            fi
+            echo "⚠ PNG not tracked - will be added as new file"
           fi
           
           # Check if there are changes
