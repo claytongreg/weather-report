@@ -211,9 +211,9 @@ def create_lake_chart():
         
         fig, ax = plt.subplots(figsize=(14, 7))
         
-        # Plot actual data - THINNER LINE
+        # Plot actual data - PURE THIN LINE (no dots)
         ax.plot(daily_data['Date'], daily_data["Queen's Bay (ft)"], 
-                color='#e74c3c', linewidth=.5, marker='o', markersize=3, 
+                color='#e74c3c', linewidth=1, 
                 label='2025 Actual', zorder=10)
         
         # Plot forecast line and add forecast point marker
