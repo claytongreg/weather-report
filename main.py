@@ -178,6 +178,12 @@ def create_lake_chart():
     """Generate Kootenay Lake chart with BLACK TRIANGLE forecast marker"""
     print("\n[CHART] Generating lake level chart...")
     
+    # Delete existing PNG to ensure Git detects changes
+    chart_path = 'public/lake_chart.png'
+    if os.path.exists(chart_path):
+        os.remove(chart_path)
+        print(f"  ✓ Removed existing chart: {chart_path}")
+
     try:
         df = read_from_sheets()
         
