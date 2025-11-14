@@ -1,4 +1,4 @@
-name: Daily Birchdale Weather & Lake Report
+name: Daily Birchdale Weather & Lake Report (FORCE FRESH PNG)
 
 on:
   schedule:
@@ -43,81 +43,109 @@ jobs:
         run: |
           echo "$GOOGLE_CREDENTIALS_JSON" | base64 -d > credentials.json
       
-      - name: Prepare public directory
+      - name: Prepare public directory and DELETE old PNG
         run: |
           mkdir -p public
           cp index.html public/index.html
+          
+          # CRITICAL: Delete old PNG completely
+          if [ -f public/lake_chart.png ]; then
+            OLD_SIZE=$(stat -c%s public/lake_chart.png 2>/dev/null || stat -f%z public/lake_chart.png)
+            rm -f public/lake_chart.png
+            echo "✓ Deleted old PNG ($OLD_SIZE bytes)"
+          else
+            echo "ℹ No old PNG to delete"
+          fi
+          
+          # Verify it's gone
+          if [ -f public/lake_chart.png ]; then
+            echo "✗ ERROR: PNG still exists after deletion!"
+            exit 1
+          else
+            echo "✓ Confirmed: PNG deleted"
+          fi
       
       - name: Run lake monitoring script
         run: |
-          echo "=== GENERATING FILES ==="
+          echo "=== GENERATING FRESH FILES ==="
           python main.py
           echo "=== GENERATION COMPLETE ==="
       
-      - name: Verify files exist
+      - name: Verify NEW PNG was created
         run: |
-          echo "=== VERIFYING FILES ==="
-          ls -lh public/
+          echo "=== VERIFYING NEW PNG ==="
           
-          if [ -f public/lake_chart.png ]; then
-            echo "✓ PNG exists: $(stat -c%s public/lake_chart.png 2>/dev/null || stat -f%z public/lake_chart.png) bytes"
-          else
-            echo "✗ PNG missing!"
+          if [ ! -f public/lake_chart.png ]; then
+            echo "✗ ERROR: PNG was not created!"
             exit 1
           fi
           
-          if [ -f public/lake.html ]; then
-            echo "✓ HTML exists"
-          else
-            echo "✗ HTML missing!"
-            exit 1
-          fi
+          NEW_SIZE=$(stat -c%s public/lake_chart.png 2>/dev/null || stat -f%z public/lake_chart.png)
+          NEW_HASH=$(md5sum public/lake_chart.png | cut -d' ' -f1)
+          
+          echo "✓ New PNG exists"
+          echo "  Size: $NEW_SIZE bytes"
+          echo "  Hash: $NEW_HASH"
+          
+          # Store for comparison
+          echo "NEW_SIZE=$NEW_SIZE" >> $GITHUB_ENV
+          echo "NEW_HASH=$NEW_HASH" >> $GITHUB_ENV
       
-      - name: Single atomic commit
+      - name: Configure Git
         run: |
           git config --global user.name "Weather & Lake Bot"
           git config --global user.email "weather-bot@github-actions"
-          
-          # Clean up credentials
+      
+      - name: Commit with verification
+        run: |
           rm -f credentials.json
           
-          echo "=== STAGING ALL FILES ATOMICALLY ==="
+          echo "=== STAGING FILES ==="
           
-          # Stage ALL files in public/ at once
+          # Stage all public files
           git add public/index.html
           git add public/lake.html
           git add public/lake_chart.png
           
-          # Verify everything is staged
           echo ""
-          echo "=== STAGED FILES ==="
+          echo "=== WHAT'S STAGED ==="
           git diff --cached --name-status
+          git diff --cached --stat
           
-          # Count staged files
-          STAGED_COUNT=$(git diff --cached --name-only | wc -l)
-          echo ""
-          echo "Files staged: $STAGED_COUNT"
+          # Verify PNG is actually staged
+          if git diff --cached --name-only | grep -q "public/lake_chart.png"; then
+            echo "✓ PNG is staged for commit"
+          else
+            echo "✗ WARNING: PNG is NOT staged!"
+            exit 1
+          fi
           
-          if [ "$STAGED_COUNT" -eq 0 ]; then
-            echo "⚠ No changes to commit"
+          # Check if there are changes
+          if git diff --cached --quiet; then
+            echo "⚠ No changes to commit (this shouldn't happen)"
             exit 0
           fi
           
-          # Single commit with ALL changes
-          TIMESTAMP=$(date +'%Y-%m-%d %I:%M %p PST')
-          
           echo ""
           echo "=== COMMITTING ==="
-          git commit -m "Update lake data & chart - $TIMESTAMP [skip ci]"
+          TIMESTAMP=$(date +'%Y-%m-%d %I:%M %p PST')
+          git commit -m "Update lake data & chart - $TIMESTAMP
+
+PNG: $NEW_SIZE bytes | Hash: $NEW_HASH"
           
-          # Push once
           echo ""
           echo "=== PUSHING ==="
           git push
           
           echo ""
-          echo "✓ Single atomic commit completed!"
-          echo "✓ All files committed together - no race condition"
+          echo "✓✓✓ COMMIT SUCCESSFUL ✓✓✓"
+          echo "PNG in this commit: $NEW_HASH"
+      
+      - name: Wait for Git to propagate
+        run: |
+          echo "Waiting 5 seconds for Git to fully propagate..."
+          sleep 5
+          echo "✓ Ready for Netlify to deploy"
       
       - name: Summary
         if: always()
@@ -126,7 +154,9 @@ jobs:
           echo "========================================="
           echo "WORKFLOW COMPLETE"
           echo "========================================="
-          echo "✓ Files generated"
-          echo "✓ Single atomic commit (prevents Netlify race)"
-          echo "✓ Netlify will deploy once with all files"
+          echo "PNG Hash: ${NEW_HASH:-unknown}"
+          echo "PNG Size: ${NEW_SIZE:-unknown} bytes"
+          echo ""
+          echo "Netlify should now deploy with the FRESH PNG"
+          echo "Check commit on GitHub to verify PNG is included"
           echo "========================================="
