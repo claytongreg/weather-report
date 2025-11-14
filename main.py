@@ -348,6 +348,7 @@ def create_lake_chart():
         import traceback
         traceback.print_exc()
         return False
+def generate_lake_page(lake_data):
     """Generate STATIC lake.html page - NO DUPLICATION!"""
     print("\n[HTML] Generating lake page (static)...")
     
