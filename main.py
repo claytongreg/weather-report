@@ -331,16 +331,44 @@ def create_lake_chart():
         print(f"  ✓ Total year lines plotted: {lines_plotted}")
         
         # ========== ADD BLACK TRIANGLE FORECAST MARKERS (ALL FORECASTS) ==========
-        # Extract all unique forecast date + level combinations
-        forecast_data = daily_data[
-            (daily_data['Forecast Level'].notna()) & 
-            (daily_data['Forecast Date'].notna()) &
-            (daily_data['Forecast Date'] != '') &
-            (daily_data['Forecast Date'] != 'nan') &
-            (daily_data['Forecast Date'] != 'None')
+        print("\n[FORECAST DEBUG] Starting forecast extraction...")
+        print(f"  Total rows in df: {len(df)}")
+        print(f"  Columns in df: {df.columns.tolist()}")
+        
+        # Check if forecast columns exist
+        has_forecast_level = 'Forecast Level' in df.columns
+        has_forecast_date = 'Forecast Date' in df.columns
+        print(f"  Has 'Forecast Level' column: {has_forecast_level}")
+        print(f"  Has 'Forecast Date' column: {has_forecast_date}")
+        
+        if has_forecast_level and has_forecast_date:
+            # Show sample of forecast data
+            print(f"\n  Sample Forecast Level values (first 20):")
+            print(f"    {df['Forecast Level'].head(20).tolist()}")
+            print(f"  Sample Forecast Date values (first 20):")
+            print(f"    {df['Forecast Date'].head(20).tolist()}")
+            
+            # Count non-null forecasts
+            non_null_level = df['Forecast Level'].notna().sum()
+            non_null_date = df['Forecast Date'].notna().sum()
+            print(f"\n  Non-null Forecast Level count: {non_null_level}")
+            print(f"  Non-null Forecast Date count: {non_null_date}")
+            
+        # Extract all unique forecast date + level combinations from ORIGINAL df (before aggregation)
+        forecast_data = df[
+            (df['Forecast Level'].notna()) & 
+            (df['Forecast Date'].notna()) &
+            (df['Forecast Date'] != '') &
+            (df['Forecast Date'] != 'nan') &
+            (df['Forecast Date'] != 'None')
         ][['Forecast Date', 'Forecast Level']].drop_duplicates()
         
-        print(f"  ⓘ Found {len(forecast_data)} unique forecast(s)")
+        print(f"\n  ⓘ Found {len(forecast_data)} unique forecast(s) in Google Sheets")
+        
+        if len(forecast_data) > 0:
+            print(f"  Unique forecasts:")
+            for idx, row in forecast_data.iterrows():
+                print(f"    - Date: '{row['Forecast Date']}', Level: {row['Forecast Level']}")
         
         if len(forecast_data) > 0:
             from dateutil import parser
@@ -351,17 +379,22 @@ def create_lake_chart():
                     forecast_level = float(row['Forecast Level'])
                     forecast_date_str = str(row['Forecast Date'])
                     
+                    print(f"\n    → Processing forecast: '{forecast_date_str}' at {forecast_level} ft")
+                    
                     # Parse the forecast date
                     forecast_date = parser.parse(forecast_date_str)
                     forecast_date = pd.Timestamp(forecast_date)
+                    print(f"       Parsed to: {forecast_date}")
                     
                     # If year wasn't in string, use current year
                     if forecast_date.year == 1900:
                         forecast_date = forecast_date.replace(year=current_year)
+                        print(f"       Adjusted year to: {forecast_date}")
                     
                     # Convert to plot date (align to current year x-axis)
                     forecast_month_day = forecast_date.strftime('%m-%d')
                     forecast_plot_date = safe_date_convert(forecast_month_day, current_year)
+                    print(f"       Plot date: {forecast_plot_date}")
                     
                     if forecast_plot_date:
                         # Add black triangle (only label first one to avoid legend clutter)
@@ -371,15 +404,22 @@ def create_lake_chart():
                                   label=label, 
                                   zorder=4, edgecolors='white', linewidths=1.5)
                         forecast_count += 1
+                        print(f"       ✓ Added triangle at {forecast_plot_date.strftime('%b %d')}: {forecast_level} ft")
+                    else:
+                        print(f"       ✗ forecast_plot_date was None!")
                         
                 except Exception as e:
-                    print(f"  ⚠ Could not parse forecast: {e}")
+                    print(f"       ✗ ERROR parsing forecast '{forecast_date_str}': {e}")
+                    import traceback
+                    traceback.print_exc()
                     continue
             
             if forecast_count > 0:
-                print(f"  ✓ Added {forecast_count} forecast triangle(s) to chart")
+                print(f"\n  ✓ TOTAL: Added {forecast_count} forecast triangle(s) to chart")
+            else:
+                print(f"\n  ⚠ WARNING: No forecast triangles added (parsing failed for all forecasts)")
         else:
-            print("  ⓘ No forecast data available")
+            print("  ⓘ No forecast data available in Google Sheets")
         
         # Reference lines
         ax.axhline(y=1752, color='#FF0000', linestyle='--', linewidth=1.5, 
