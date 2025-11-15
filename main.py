@@ -330,75 +330,60 @@ def create_lake_chart():
         
         print(f"  ✓ Total year lines plotted: {lines_plotted}")
         
-        # ========== ADD BLACK TRIANGLE FORECAST MARKER ==========
-        # Get the most recent forecast data
-        # Filter out both NaN values and empty/nan strings
-        forecast_rows = daily_data[
+        # ========== ADD BLACK TRIANGLE FORECAST MARKERS (ALL FORECASTS) ==========
+        # Extract all unique forecast date + level combinations
+        forecast_data = daily_data[
             (daily_data['Forecast Level'].notna()) & 
             (daily_data['Forecast Date'].notna()) &
             (daily_data['Forecast Date'] != '') &
             (daily_data['Forecast Date'] != 'nan') &
             (daily_data['Forecast Date'] != 'None')
-        ]
+        ][['Forecast Date', 'Forecast Level']].drop_duplicates()
         
-        print(f"  ⓘ Found {len(forecast_rows)} rows with valid forecast data")
+        print(f"  ⓘ Found {len(forecast_data)} unique forecast(s)")
         
-        if not forecast_rows.empty:
-            try:
-                # Get the most recent forecast
-                forecast_row = forecast_rows.iloc[-1]
-                forecast_level = float(forecast_row['Forecast Level'])
-                forecast_date_str = str(forecast_row['Forecast Date'])
-                
-                # Parse the forecast date
-                # Common formats: "November 21, 2025", "Nov 21", "November 21"
-                import re
-                from dateutil import parser
-                
+        if len(forecast_data) > 0:
+            from dateutil import parser
+            forecast_count = 0
+            
+            for idx, row in forecast_data.iterrows():
                 try:
-                    # Try to parse the date string
+                    forecast_level = float(row['Forecast Level'])
+                    forecast_date_str = str(row['Forecast Date'])
+                    
+                    # Parse the forecast date
                     forecast_date = parser.parse(forecast_date_str)
                     forecast_date = pd.Timestamp(forecast_date)
                     
                     # If year wasn't in string, use current year
-                    if forecast_date.year == 1900:  # Default year from parser
-                        current_year = daily_data['Date'].dt.year.iloc[-1]
+                    if forecast_date.year == 1900:
                         forecast_date = forecast_date.replace(year=current_year)
                     
-                    last_date = daily_data['Date'].iloc[-1]
-                    last_level = daily_data["Queen's Bay (ft)"].iloc[-1]
+                    # Convert to plot date (align to current year x-axis)
+                    forecast_month_day = forecast_date.strftime('%m-%d')
+                    forecast_plot_date = safe_date_convert(forecast_month_day, current_year)
                     
-                    # Only draw if forecast is in the future
-                    if forecast_date > last_date:
-                        # Dashed forecast line from current to forecast
-                        ax.plot([last_date, forecast_date], [last_level, forecast_level],
-                               'k--', linewidth=1.5, alpha=0.6, zorder=9)
+                    if forecast_plot_date:
+                        # Add black triangle (only label first one to avoid legend clutter)
+                        label = 'Fortis Forecast' if forecast_count == 0 else None
+                        ax.scatter([forecast_plot_date], [forecast_level], 
+                                  marker='^', s=150, color='black', 
+                                  label=label, 
+                                  zorder=4, edgecolors='white', linewidths=1.5)
+                        forecast_count += 1
                         
-                        # BLACK TRIANGLE at forecast date
-                        ax.plot(forecast_date, forecast_level, '^', 
-                               color='black', markersize=12, 
-                               markeredgewidth=0, zorder=11,
-                               label=f'Forecast: {forecast_level} ft')
-                        
-                        # No annotation - just the triangle
-                        
-                        print(f"  ✓ Added forecast marker at {forecast_date.strftime('%Y-%m-%d')}: {forecast_level} ft")
-                    else:
-                        print(f"  ⓘ Forecast date {forecast_date.strftime('%Y-%m-%d')} is in the past, not showing marker")
-                        
-                except Exception as date_parse_error:
-                    print(f"  ⚠ Could not parse forecast date '{forecast_date_str}': {date_parse_error}")
-                    
-            except Exception as e:
-                print(f"  ⚠ Could not add forecast marker: {e}")
+                except Exception as e:
+                    print(f"  ⚠ Could not parse forecast: {e}")
+                    continue
+            
+            if forecast_count > 0:
+                print(f"  ✓ Added {forecast_count} forecast triangle(s) to chart")
         else:
             print("  ⓘ No forecast data available")
         
         # Reference lines
         ax.axhline(y=1752, color='#FF0000', linestyle='--', linewidth=1.5, 
                    alpha=0.7, label='Flood Level (1752 ft)', zorder=1)
-        ax.axhline(y=1745, color='#8B0000', linestyle=':', linewidth=1.5,
-                   alpha=0.7, label='Treaty Max (Nelson)', zorder=1)
         
         # Add text annotation for record high
         ax.text(0.98, 0.98, 'Record High since Duncan Dam completed 1967 >> 1754.24 ft in 1974',
