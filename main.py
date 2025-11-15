@@ -29,8 +29,6 @@ SPREADSHEET_ID = os.environ.get('LAKE_SPREADSHEET_ID', '14U9YwogifuDUPS4qBXke2QN
 SHEET_NAME = 'Lake Level Data'
 CREDENTIALS_FILE = os.environ.get('GOOGLE_CREDENTIALS_FILE', 'credentials.json')
 
-# Historical Data Configuration
-HISTORICAL_DATA_PATH = 'kootenay_lake_levels_final.xlsx'
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -194,7 +192,7 @@ def scrape_lake_data():
         return None, None
 
 def create_lake_chart():
-    """Generate Kootenay Lake chart with PDF-style historical range and ALL forecast markers"""
+    """Generate Kootenay Lake chart with PDF-style historical range using Google Sheets data"""
     print("\n[CHART] Generating lake level chart...")
     
     # CRITICAL FIX: Delete existing PNG to ensure Git detects changes
@@ -210,74 +208,90 @@ def create_lake_chart():
             print(f"  ⚠ Could not remove existing chart: {e}")
     
     try:
-        # Load historical data from Excel
-        use_historical = False
-        if os.path.exists(HISTORICAL_DATA_PATH):
-            try:
-                df_hist = pd.read_excel(HISTORICAL_DATA_PATH)
-                df_hist['date'] = pd.to_datetime(df_hist['date'])
-                # NOTE: Despite the column name, level_meters is actually in FEET!
-                df_hist['level_feet'] = df_hist['level_meters']
-                df_hist['month_day'] = df_hist['date'].dt.strftime('%m-%d')
-                use_historical = True
-                print(f"  ✓ Loaded {len(df_hist)} historical records")
-            except Exception as e:
-                print(f"  ⚠ Could not load historical data: {e}")
+        # Read ALL data from Google Sheets
+        print("\n[STEP 1] Reading data from Google Sheets...")
+        df = read_from_sheets()
+        
+        if df is None or len(df) < 1:
+            print("  ✗ Could not read data from Google Sheets")
+            return False
+        
+        print(f"  ✓ Read {len(df)} rows from Google Sheets")
+        
+        # Parse the data
+        df['Scrape Time'] = pd.to_datetime(df['Scrape Time'], errors='coerce')
+        df['Date'] = df['Scrape Time'].dt.date
+        df['Date'] = pd.to_datetime(df['Date'])
+        
+        # Get lake level data - handle both old column name and new
+        if "Queen's Bay (ft)" in df.columns:
+            df['level_feet'] = pd.to_numeric(df["Queen's Bay (ft)"], errors='coerce')
+        elif 'level_meters' in df.columns:
+            # If data has level_meters column (from historical import), it's actually in feet
+            df['level_feet'] = pd.to_numeric(df['level_meters'], errors='coerce')
         else:
-            print(f"  ⚠ Historical data file not found: {HISTORICAL_DATA_PATH}")
+            print("  ✗ Could not find lake level column in data")
+            return False
         
-        # Load current data from Google Sheets
-        df_sheets = read_from_sheets()
+        df['year'] = df['Date'].dt.year
+        df['month'] = df['Date'].dt.month
+        df['day'] = df['Date'].dt.day
+        df['month_day'] = df['Date'].dt.strftime('%m-%d')
         
-        if df_sheets is None or len(df_sheets) < 1:
-            print("  ⚠ Could not read data from Google Sheets")
-            if not use_historical:
-                print("  ✗ No data available from either source")
-                return False
-        else:
-            print(f"  ✓ Read {len(df_sheets)} rows from Google Sheets")
+        # Parse forecast data
+        df['Forecast Level'] = pd.to_numeric(df['Forecast Level'], errors='coerce')
+        df['Forecast Date'] = df['Forecast Date'].astype(str)
         
-        # Parse Google Sheets data for forecast markers
+        # Remove rows without lake level data
+        df = df.dropna(subset=['level_feet'])
+        
+        if len(df) < 1:
+            print("  ✗ No valid lake level data found")
+            return False
+        
+        print(f"  ✓ Processed {len(df)} data points")
+        print(f"    Date range: {df['Date'].min()} to {df['Date'].max()}")
+        print(f"    Level range: {df['level_feet'].min():.1f} to {df['level_feet'].max():.1f} ft")
+        
+        # Extract forecast markers
+        print("\n[STEP 2] Extracting forecast markers...")
         forecast_markers = []
-        if df_sheets is not None and len(df_sheets) > 0:
-            df_sheets['Scrape Time'] = pd.to_datetime(df_sheets['Scrape Time'], errors='coerce')
-            df_sheets['Forecast Level'] = pd.to_numeric(df_sheets['Forecast Level'], errors='coerce')
-            df_sheets['Forecast Date'] = df_sheets['Forecast Date'].astype(str)
-            
-            # Extract all unique forecasts (forecast date + level combinations)
-            forecast_data = df_sheets[
-                (df_sheets['Forecast Level'].notna()) & 
-                (df_sheets['Forecast Date'].str.len() > 3)
-            ][['Forecast Date', 'Forecast Level']].drop_duplicates()
-            
-            for _, row in forecast_data.iterrows():
-                try:
-                    forecast_date = pd.to_datetime(row['Forecast Date'])
-                    forecast_level = float(row['Forecast Level'])
-                    forecast_markers.append({'date': forecast_date, 'level': forecast_level})
-                except:
-                    pass
-            
-            if forecast_markers:
-                print(f"  ✓ Found {len(forecast_markers)} forecast marker(s)")
+        forecast_data = df[
+            (df['Forecast Level'].notna()) & 
+            (df['Forecast Date'].str.len() > 3)
+        ][['Forecast Date', 'Forecast Level']].drop_duplicates()
+        
+        for _, row in forecast_data.iterrows():
+            try:
+                forecast_date = pd.to_datetime(row['Forecast Date'])
+                forecast_level = float(row['Forecast Level'])
+                forecast_markers.append({'date': forecast_date, 'level': forecast_level})
+            except:
+                pass
+        
+        if forecast_markers:
+            print(f"  ✓ Found {len(forecast_markers)} forecast marker(s)")
+        else:
+            print(f"  → No forecast markers found")
         
         # Create figure
+        print("\n[STEP 3] Creating chart...")
         fig, ax = plt.subplots(figsize=(16, 9), dpi=100)
         
         current_year = datetime.now().year
         date_range = pd.date_range(f'{current_year}-01-01', f'{current_year}-12-31', freq='D')
         
-        if use_historical:
-            # Define the years to plot
-            highest_years = [2012, 2018]
-            lowest_years = [2008, 2002]
-            recent_years = [2020, 2021, 2022, 2023, 2024]
-            
-            # Calculate historical range (1991-2024)
-            range_df = df_hist[(df_hist['year'] >= 1991) & (df_hist['year'] <= 2024)].copy()
+        # Define the years to plot
+        highest_years = [2012, 2018]
+        lowest_years = [2008, 2002]
+        recent_years = [2020, 2021, 2022, 2023, 2024]
+        
+        # Calculate historical range (1991-2024) for shading
+        range_df = df[(df['year'] >= 1991) & (df['year'] <= 2024)].copy()
+        if len(range_df) > 0:
             historical_range = range_df.groupby('month_day')['level_feet'].agg(['min', 'max']).reset_index()
             
-            # Convert historical range to plot dates
+            # Convert to plot dates
             historical_range['plot_date'] = historical_range['month_day'].apply(
                 lambda x: safe_date_convert(x, current_year)
             )
@@ -288,54 +302,60 @@ def create_lake_chart():
                             historical_range['min'], 
                             historical_range['max'],
                             color='#CCCCCC', alpha=0.5, label='Historical Range (1991-2024)', zorder=1)
-            
-            # Define colors and line widths
-            colors = {
-                2012: '#00FF00', 2018: '#90EE90',
-                2008: '#FFA500', 2002: '#FFD700',
-                2020: '#00BFFF', 2021: '#1E90FF', 2022: '#0000FF', 
-                2023: '#808080', 2024: '#FF00FF',
-                current_year: '#FF0000'
-            }
-            
-            linewidths = {
-                2012: 2.5, 2018: 2, 2008: 2, 2002: 2,
-                2020: 1.5, 2021: 1.5, 2022: 1.5, 2023: 1.5, 2024: 1.5,
-                current_year: 3
-            }
-            
-            # Plot all selected years
-            all_years = highest_years + lowest_years + recent_years + [current_year]
-            
-            for year in all_years:
-                year_data = df_hist[df_hist['year'] == year].copy()
+            print(f"  ✓ Plotted historical range shading")
+        
+        # Define colors and line widths
+        colors = {
+            2012: '#00FF00', 2018: '#90EE90',
+            2008: '#FFA500', 2002: '#FFD700',
+            2020: '#00BFFF', 2021: '#1E90FF', 2022: '#0000FF', 
+            2023: '#808080', 2024: '#FF00FF',
+            current_year: '#FF0000'
+        }
+        
+        linewidths = {
+            2012: 2.5, 2018: 2, 2008: 2, 2002: 2,
+            2020: 1.5, 2021: 1.5, 2022: 1.5, 2023: 1.5, 2024: 1.5,
+            current_year: 3
+        }
+        
+        # Plot all selected years
+        all_years = highest_years + lowest_years + recent_years + [current_year]
+        lines_plotted = 0
+        
+        for year in all_years:
+            year_data = df[df['year'] == year].copy()
+            if len(year_data) > 0:
+                year_data['plot_date'] = year_data['month_day'].apply(
+                    lambda x: safe_date_convert(x, current_year)
+                )
+                year_data = year_data.dropna(subset=['plot_date']).sort_values('plot_date')
+                
                 if len(year_data) > 0:
-                    year_data['plot_date'] = year_data['month_day'].apply(
-                        lambda x: safe_date_convert(x, current_year)
-                    )
-                    year_data = year_data.dropna(subset=['plot_date']).sort_values('plot_date')
-                    
                     ax.plot(year_data['plot_date'], year_data['level_feet'],
                            color=colors.get(year, '#000000'),
                            linewidth=linewidths.get(year, 1.5),
                            label=str(year),
                            zorder=3 if year == current_year else 2)
+                    lines_plotted += 1
+                    print(f"    ✓ Plotted {year}: {len(year_data)} points")
+        
+        print(f"  ✓ Total lines plotted: {lines_plotted}")
         
         # Add ALL forecast markers (black triangles)
         if forecast_markers:
+            print(f"  → Adding {len(forecast_markers)} forecast marker(s)...")
             for i, forecast in enumerate(forecast_markers):
                 forecast_month_day = forecast['date'].strftime('%m-%d')
                 forecast_plot_date = safe_date_convert(forecast_month_day, current_year)
                 
                 if forecast_plot_date:
-                    # Only add label for first marker to avoid legend clutter
                     label = 'Fortis Forecast' if i == 0 else None
                     ax.scatter([forecast_plot_date], [forecast['level']], 
                               marker='^', s=150, color='black', 
                               label=label, 
                               zorder=4, edgecolors='white', linewidths=1.5)
-            
-            print(f"  ✓ Added {len(forecast_markers)} forecast marker(s) to chart")
+            print(f"  ✓ Added {len(forecast_markers)} forecast marker(s)")
         
         # Add reference lines
         ax.axhline(y=1752, color='#FF0000', linestyle='--', linewidth=1.5, 
@@ -371,15 +391,13 @@ def create_lake_chart():
         os.makedirs('public', exist_ok=True)
         
         # Save with MAXIMUM robustness
-        print(f"  → Saving chart to {chart_path}...")
+        print(f"\n[STEP 4] Saving chart to {chart_path}...")
         plt.savefig(chart_path, dpi=150, bbox_inches='tight', facecolor='white')
         plt.close('all')
         
         # Force matplotlib to flush
         import gc
         gc.collect()
-        
-        # Brief pause to ensure write completes
         time.sleep(0.3)
         
         # VERIFY FILE WAS CREATED
@@ -403,6 +421,7 @@ def create_lake_chart():
             print(f"  ✗ ERROR: File not created at {chart_path}!")
             return False
         
+        print(f"\n✓ Chart generation complete with {lines_plotted} year lines!")
         return True
         
     except Exception as e:
