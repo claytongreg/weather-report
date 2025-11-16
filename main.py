@@ -6,7 +6,7 @@ Birchdale Weather & Lake Monitor
 """
 import os
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 import re
 from bs4 import BeautifulSoup
@@ -18,6 +18,7 @@ import matplotlib.dates as mdates
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 import time
+import glob
 
 # Configuration
 LAT = 50.038417
@@ -192,17 +193,26 @@ def create_lake_chart():
     """Generate Kootenay Lake chart with BLACK TRIANGLE forecast marker"""
     print("\n[CHART] Generating lake level chart...")
     
-    # CRITICAL FIX: Delete existing PNG to ensure Git detects changes
-    chart_path = 'public/lake_chart.png'
-    if os.path.exists(chart_path):
-        try:
-            old_size = os.path.getsize(chart_path)
-            old_time = datetime.fromtimestamp(os.path.getmtime(chart_path)).strftime('%Y-%m-%d %H:%M:%S')
-            os.remove(chart_path)
-            print(f"  ✓ Removed existing chart (was {old_size:,} bytes from {old_time})")
-            time.sleep(0.2)  # Brief pause after deletion
-        except Exception as e:
-            print(f"  ⚠ Could not remove existing chart: {e}")
+    # Create date-stamped filename
+    today = datetime.now().strftime('%Y-%m-%d')
+    chart_filename = f'lake_chart_{today}.png'
+    chart_path = f'public/{chart_filename}'
+    
+    # Clean up old PNG files (keep only last 2 days)
+    try:
+        all_charts = glob.glob('public/lake_chart_*.png')
+        cutoff_date = datetime.now() - timedelta(days=2)
+        
+        for old_chart in all_charts:
+            # Extract date from filename (lake_chart_2025-11-16.png)
+            match = re.search(r'lake_chart_(\d{4}-\d{2}-\d{2})\.png', old_chart)
+            if match:
+                chart_date = datetime.strptime(match.group(1), '%Y-%m-%d')
+                if chart_date < cutoff_date:
+                    os.remove(old_chart)
+                    print(f"  ✓ Removed old chart: {os.path.basename(old_chart)}")
+    except Exception as e:
+        print(f"  ⚠ Could not clean up old charts: {e}")
     
     try:
         df = read_from_sheets()
@@ -700,7 +710,7 @@ def generate_lake_page(lake_data):
       <div class="chart-section">
         <h2>Historical Lake Level Trend</h2>
         <div class="chart-container">
-          <img src="lake_chart.png?v={datetime.now().strftime('%Y%m%d%H%M')}" alt="Kootenay Lake Level Chart">
+          <img src="lake_chart_{datetime.now().strftime('%Y-%m-%d')}.png" alt="Kootenay Lake Level Chart">
         </div>
       </div>
       
@@ -753,7 +763,7 @@ def main():
         print("\n" + "=" * 70)
         print("✓ ALL TASKS COMPLETED SUCCESSFULLY")
         print("✓ Lake page (static): public/lake.html")
-        print("✓ Lake chart: public/lake_chart.png")
+        print(f"✓ Lake chart: public/lake_chart_{datetime.now().strftime('%Y-%m-%d')}.png")
         print("✓ Weather page (dynamic): index.html unchanged")
         print("=" * 70)
         
