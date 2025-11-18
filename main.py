@@ -248,25 +248,38 @@ def create_lake_chart():
         recent_data = df[['Scrape Time', "Queen's Bay (ft)"]].tail(5)
         print(f"  {recent_data.to_string()}")
         
-        # Parse data - Handle MIXED date formats (historical: "2025-11-09", scraped: "2025-11-14 02:20:27")
-        # CRITICAL FIX: Use .dt.date to extract date part, then convert back
-        df['Scrape Time'] = pd.to_datetime(df['Scrape Time'], errors='coerce', infer_datetime_format=True)
+        # Parse data - Handle MIXED date formats by extracting date string FIRST
+        # CRITICAL: Extract just the date part as STRING before any datetime conversion
+        # This handles both "2025-11-09" and "2025-11-14 02:20:27" formats
         
-        # Extract just the date (no time) - handles both formats consistently
-        df['Date'] = df['Scrape Time'].dt.date
+        # Convert to string and extract just the date part (YYYY-MM-DD)
+        df['Date_str'] = df['Scrape Time'].astype(str).str.split(' ').str[0]
         
-        # Convert back to datetime at midnight for aggregation consistency
-        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+        # Now parse the clean date strings
+        df['Date'] = pd.to_datetime(df['Date_str'], errors='coerce', format='%Y-%m-%d')
+        
+        # Also parse Scrape Time for other uses
+        df['Scrape Time'] = pd.to_datetime(df['Scrape Time'], errors='coerce')
         
         # DEBUG: Check for any NaT values
         nat_count = df['Date'].isna().sum()
         if nat_count > 0:
             print(f"  [WARNING] Found {nat_count} rows with unparseable dates")
+            bad_dates = df[df['Date'].isna()]['Date_str'].head(5).tolist()
+            print(f"  [DEBUG] Sample bad date strings: {bad_dates}")
         
         print(f"  [DEBUG] Date parsing complete:")
         print(f"    Total rows: {len(df)}")
         print(f"    Successfully parsed dates: {df['Date'].notna().sum()}")
         print(f"    Date range: {df['Date'].min()} to {df['Date'].max()}")
+        
+        # DEBUG: Check Nov 14+ specifically
+        recent = df[df['Date_str'].str.contains('2025-11-1[4-8]', na=False)]
+        print(f"    Rows with Nov 14-18 in date string: {len(recent)}")
+        if len(recent) > 0:
+            print(f"    Sample Nov 14-18 parsing:")
+            sample = recent[['Date_str', 'Date']].head(3)
+            print(f"    {sample.to_string()}")
         df["Queen's Bay (ft)"] = pd.to_numeric(df["Queen's Bay (ft)"], errors='coerce')
         df['Forecast Level'] = pd.to_numeric(df['Forecast Level'], errors='coerce')
         df['Forecast Date'] = df['Forecast Date'].astype(str)
