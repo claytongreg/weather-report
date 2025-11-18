@@ -156,7 +156,7 @@ def scrape_lake_data():
         discharge_match = re.search(r"Average Daily Kootenay River Discharge at ([^f]+?)\s+for\s+([^:]+):\s*(\d+)\s*cfs", text, re.IGNORECASE)
         
         lake_data = {}
-        data_row = [datetime.now().strftime('%Y-%m-%d %H:%M:%S')]
+        data_row = [datetime.now().strftime('%Y-%m-%d')]
         
         if queens_match:
             lake_data['queens_ft'] = queens_match.group(1)
