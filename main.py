@@ -248,10 +248,16 @@ def create_lake_chart():
         recent_data = df[['Scrape Time', "Queen's Bay (ft)"]].tail(5)
         print(f"  {recent_data.to_string()}")
         
-        # Parse data
+        # Parse data - SIMPLIFIED to avoid date conversion issues
         df['Scrape Time'] = pd.to_datetime(df['Scrape Time'], errors='coerce')
-        df['Date'] = df['Scrape Time'].dt.date
-        df['Date'] = pd.to_datetime(df['Date'])
+        # Use normalize() instead of converting to date object and back
+        df['Date'] = df['Scrape Time'].dt.normalize()  # Strips time, keeps as datetime
+        
+        # DEBUG: Check for any NaT values that might cause data loss
+        nat_count = df['Date'].isna().sum()
+        if nat_count > 0:
+            print(f"  [WARNING] Found {nat_count} rows with unparseable dates")
+            print(f"  [DEBUG] Sample bad dates: {df[df['Date'].isna()]['Scrape Time'].head(3).tolist()}")
         df["Queen's Bay (ft)"] = pd.to_numeric(df["Queen's Bay (ft)"], errors='coerce')
         df['Forecast Level'] = pd.to_numeric(df['Forecast Level'], errors='coerce')
         df['Forecast Date'] = df['Forecast Date'].astype(str)
