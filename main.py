@@ -248,16 +248,25 @@ def create_lake_chart():
         recent_data = df[['Scrape Time', "Queen's Bay (ft)"]].tail(5)
         print(f"  {recent_data.to_string()}")
         
-        # Parse data - SIMPLIFIED to avoid date conversion issues
-        df['Scrape Time'] = pd.to_datetime(df['Scrape Time'], errors='coerce')
-        # Use normalize() instead of converting to date object and back
-        df['Date'] = df['Scrape Time'].dt.normalize()  # Strips time, keeps as datetime
+        # Parse data - Handle MIXED date formats (historical: "2025-11-09", scraped: "2025-11-14 02:20:27")
+        # CRITICAL FIX: Use .dt.date to extract date part, then convert back
+        df['Scrape Time'] = pd.to_datetime(df['Scrape Time'], errors='coerce', infer_datetime_format=True)
         
-        # DEBUG: Check for any NaT values that might cause data loss
+        # Extract just the date (no time) - handles both formats consistently
+        df['Date'] = df['Scrape Time'].dt.date
+        
+        # Convert back to datetime at midnight for aggregation consistency
+        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+        
+        # DEBUG: Check for any NaT values
         nat_count = df['Date'].isna().sum()
         if nat_count > 0:
             print(f"  [WARNING] Found {nat_count} rows with unparseable dates")
-            print(f"  [DEBUG] Sample bad dates: {df[df['Date'].isna()]['Scrape Time'].head(3).tolist()}")
+        
+        print(f"  [DEBUG] Date parsing complete:")
+        print(f"    Total rows: {len(df)}")
+        print(f"    Successfully parsed dates: {df['Date'].notna().sum()}")
+        print(f"    Date range: {df['Date'].min()} to {df['Date'].max()}")
         df["Queen's Bay (ft)"] = pd.to_numeric(df["Queen's Bay (ft)"], errors='coerce')
         df['Forecast Level'] = pd.to_numeric(df['Forecast Level'], errors='coerce')
         df['Forecast Date'] = df['Forecast Date'].astype(str)
@@ -276,6 +285,20 @@ def create_lake_chart():
         else:
             print(f"  ⚠ No forecast data found in raw data (all NaN)")
         
+        # DEBUG: Check what dates we have BEFORE aggregation
+        print(f"\n  [DEBUG] BEFORE aggregation:")
+        print(f"    Total rows: {len(df)}")
+        print(f"    Date range: {df['Date'].min()} to {df['Date'].max()}")
+        print(f"    Rows with non-null dates: {df['Date'].notna().sum()}")
+        queens_bay_col = "Queen's Bay (ft)"
+        print(f"    Rows with non-null Queen's Bay: {df[queens_bay_col].notna().sum()}")
+        recent_before = df[df['Date'] >= '2025-11-14']
+        print(f"    Rows from Nov 14 onwards: {len(recent_before)}")
+        if len(recent_before) > 0:
+            print(f"    Sample:")
+            sample_data = recent_before[['Date', queens_bay_col]].head(5)
+            print(f"    {sample_data.to_string()}")
+        
         # Aggregate daily data
         daily_data = df.groupby('Date').agg({
             "Queen's Bay (ft)": 'mean',
@@ -289,6 +312,20 @@ def create_lake_chart():
             print(f"  ✓ {len(forecast_check_agg)} days with forecast data after aggregation")
         else:
             print(f"  ⚠ No forecast data after aggregation (lost in groupby)")
+        
+        # DEBUG: Check what dates we have AFTER aggregation
+        print(f"\n  [DEBUG] AFTER aggregation:")
+        print(f"    Total days: {len(daily_data)}")
+        print(f"    Date range: {daily_data['Date'].min()} to {daily_data['Date'].max()}")
+        recent_after = daily_data[daily_data['Date'] >= '2025-11-14']
+        print(f"    Days from Nov 14 onwards: {len(recent_after)}")
+        if len(recent_after) > 0:
+            print(f"    Sample:")
+            queens_bay_col = "Queen's Bay (ft)"
+            sample_after = recent_after[['Date', queens_bay_col]].head(5)
+            print(f"    {sample_after.to_string()}")
+        else:
+            print(f"    ⚠️ NO DATA FROM NOV 14 ONWARDS AFTER AGGREGATION!")
         
         daily_data = daily_data.dropna(subset=["Queen's Bay (ft)"])
         
