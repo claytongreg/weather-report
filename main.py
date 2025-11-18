@@ -103,19 +103,33 @@ def read_from_sheets():
     """Read all data from Google Sheets"""
     try:
         sheet = setup_google_sheets()
+        
+        # Force fresh data by requesting with specific render options
         result = sheet.values().get(
             spreadsheetId=SPREADSHEET_ID,
-            range=f'{SHEET_NAME}!A:N'
+            range=f'{SHEET_NAME}!A:N',
+            valueRenderOption='FORMATTED_VALUE',  # Get formatted values
+            dateTimeRenderOption='FORMATTED_STRING'  # Get dates as strings
         ).execute()
         
         values = result.get('values', [])
+        
+        # Debug: Show what we got from API
+        print(f"[DEBUG] Google Sheets API returned {len(values)} total rows")
+        if len(values) > 1:
+            print(f"[DEBUG] Last row from API (first 3 cols): {values[-1][:3] if len(values[-1]) >= 3 else values[-1]}")
+        
         if len(values) < 2:
             return None
         
         df = pd.DataFrame(values[1:], columns=values[0])
+        print(f"[DEBUG] Created DataFrame with {len(df)} rows")
+        
         return df
     except Exception as e:
         print(f"[WARN] Could not read from Google Sheets: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 # ============================================================================
@@ -192,6 +206,8 @@ def scrape_lake_data():
 def create_lake_chart():
     """Generate Kootenay Lake chart with BLACK TRIANGLE forecast marker"""
     print("\n[CHART] Generating lake level chart...")
+    print(f"  [DEBUG] Current year: {datetime.now().year}")
+    print(f"  [DEBUG] Current date: {datetime.now().strftime('%Y-%m-%d')}")
     
     # Create date-stamped filename
     today = datetime.now().strftime('%Y-%m-%d')
@@ -226,6 +242,10 @@ def create_lake_chart():
             return False
         
         print(f"  ✓ Read {len(df)} rows from Google Sheets")
+        
+        # DEBUG: Show the last 5 rows of raw data
+        print(f"\n  [DEBUG] Last 5 rows from Google Sheets:")
+        print(f"  {df[['Scrape Time', 'Queen\\'s Bay (ft)']].tail(5).to_string()}")
         
         # Parse data
         df['Scrape Time'] = pd.to_datetime(df['Scrape Time'], errors='coerce')
@@ -270,6 +290,18 @@ def create_lake_chart():
             return False
         
         print(f"  ✓ Processing {len(daily_data)} days of data")
+        
+        # DEBUG: Show recent 2025 data specifically
+        current_year = datetime.now().year
+        data_2025 = daily_data[daily_data['Date'].dt.year == current_year].copy()
+        if len(data_2025) > 0:
+            print(f"\n  [DEBUG] 2025 data found: {len(data_2025)} days")
+            print(f"  [DEBUG] Date range: {data_2025['Date'].min()} to {data_2025['Date'].max()}")
+            print(f"  [DEBUG] Last 5 days of 2025 data:")
+            recent_2025 = data_2025.tail(5)[['Date', 'Queen\\'s Bay (ft)']]
+            print(f"  {recent_2025.to_string()}")
+        else:
+            print(f"  [WARNING] No 2025 data found in daily_data!")
         
         # Add year, month_day columns for multi-year plotting
         daily_data['year'] = daily_data['Date'].dt.year
@@ -323,6 +355,13 @@ def create_lake_chart():
         for year in all_years:
             year_data = daily_data[daily_data['year'] == year].copy()
             if len(year_data) > 0:
+                if year == current_year:
+                    print(f"\n  [DEBUG] Plotting {year} (CURRENT YEAR):")
+                    print(f"    Raw data points: {len(year_data)}")
+                    print(f"    Date range: {year_data['Date'].min()} to {year_data['Date'].max()}")
+                    print(f"    Last 3 points:")
+                    print(f"    {year_data[['Date', 'Queen\\'s Bay (ft)']].tail(3).to_string()}")
+                
                 # Convert dates to current year for x-axis alignment
                 year_data['plot_date'] = year_data['month_day'].apply(
                     lambda x: safe_date_convert(x, current_year)
@@ -336,7 +375,10 @@ def create_lake_chart():
                            label=str(year),
                            zorder=3 if year == current_year else 2)
                     lines_plotted += 1
-                    print(f"    ✓ Plotted {year}: {len(year_data)} points")
+                    if year == current_year:
+                        print(f"    ✓ Plotted {year}: {len(year_data)} points (after date conversion)")
+                    else:
+                        print(f"    ✓ Plotted {year}: {len(year_data)} points")
         
         print(f"  ✓ Total year lines plotted: {lines_plotted}")
         
@@ -430,6 +472,28 @@ def create_lake_chart():
                 print(f"\n  ⚠ WARNING: No forecast triangles added (parsing failed for all forecasts)")
         else:
             print("  ⓘ No forecast data available in Google Sheets")
+        
+        # ========== ADD MARKER FOR LATEST 2025 DATA POINT ==========
+        # This helps visualize that the chart IS updating even when the line looks flat
+        current_year_data = daily_data[daily_data['year'] == current_year].copy()
+        if len(current_year_data) > 0:
+            # Get the most recent data point
+            current_year_data = current_year_data.sort_values('Date')
+            latest_point = current_year_data.iloc[-1]
+            latest_date = latest_point['Date']
+            latest_level = latest_point["Queen's Bay (ft)"]
+            
+            # Convert to plot coordinates
+            latest_month_day = latest_date.strftime('%m-%d')
+            latest_plot_date = safe_date_convert(latest_month_day, current_year)
+            
+            if latest_plot_date and pd.notna(latest_level):
+                # Add a circle marker at the latest point
+                ax.scatter([latest_plot_date], [latest_level], 
+                          marker='o', s=100, color='#FF0000', 
+                          label=f'Latest: {latest_date.strftime("%b %d")}',
+                          zorder=5, edgecolors='white', linewidths=2)
+                print(f"  ✓ Added 'Latest Data' marker at {latest_date.strftime('%b %d')}: {latest_level} ft")
         
         # Reference lines
         ax.axhline(y=1752, color='#FF0000', linestyle='--', linewidth=1.5, 
