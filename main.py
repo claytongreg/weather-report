@@ -245,7 +245,8 @@ def create_lake_chart():
         
         # DEBUG: Show the last 5 rows of raw data
         print(f"\n  [DEBUG] Last 5 rows from Google Sheets:")
-        print(f"  {df[['Scrape Time', 'Queen\\'s Bay (ft)']].tail(5).to_string()}")
+        recent_data = df[['Scrape Time', "Queen's Bay (ft)"]].tail(5)
+        print(f"  {recent_data.to_string()}")
         
         # Parse data
         df['Scrape Time'] = pd.to_datetime(df['Scrape Time'], errors='coerce')
@@ -298,7 +299,7 @@ def create_lake_chart():
             print(f"\n  [DEBUG] 2025 data found: {len(data_2025)} days")
             print(f"  [DEBUG] Date range: {data_2025['Date'].min()} to {data_2025['Date'].max()}")
             print(f"  [DEBUG] Last 5 days of 2025 data:")
-            recent_2025 = data_2025.tail(5)[['Date', 'Queen\\'s Bay (ft)']]
+            recent_2025 = data_2025.tail(5)[['Date', "Queen's Bay (ft)"]]
             print(f"  {recent_2025.to_string()}")
         else:
             print(f"  [WARNING] No 2025 data found in daily_data!")
@@ -360,7 +361,8 @@ def create_lake_chart():
                     print(f"    Raw data points: {len(year_data)}")
                     print(f"    Date range: {year_data['Date'].min()} to {year_data['Date'].max()}")
                     print(f"    Last 3 points:")
-                    print(f"    {year_data[['Date', 'Queen\\'s Bay (ft)']].tail(3).to_string()}")
+                    last_points = year_data[['Date', "Queen's Bay (ft)"]].tail(3)
+                    print(f"    {last_points.to_string()}")
                 
                 # Convert dates to current year for x-axis alignment
                 year_data['plot_date'] = year_data['month_day'].apply(
