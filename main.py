@@ -3,6 +3,7 @@
 Birchdale Weather & Lake Monitor
 - Weather stays on main page with real-time API calls (dynamic)
 - Lake data moves to separate page (static, updated daily)
+- MODIFIED: Discharge data plotted as bars on secondary y-axis
 """
 import os
 import requests
@@ -204,7 +205,7 @@ def scrape_lake_data():
         return None, None
 
 def create_lake_chart():
-    """Generate Kootenay Lake chart with BLACK TRIANGLE forecast marker"""
+    """Generate Kootenay Lake chart with DISCHARGE BARS on secondary y-axis"""
     print("\n[CHART] Generating lake level chart...")
     print(f"  [DEBUG] Current year: {datetime.now().year}")
     print(f"  [DEBUG] Current date: {datetime.now().strftime('%Y-%m-%d')}")
@@ -280,65 +281,36 @@ def create_lake_chart():
             print(f"    Sample Nov 14-18 parsing:")
             sample = recent[['Date_str', 'Date']].head(3)
             print(f"    {sample.to_string()}")
+        
+        # Parse numeric columns
         df["Queen's Bay (ft)"] = pd.to_numeric(df["Queen's Bay (ft)"], errors='coerce')
+        df['Discharge (cfs)'] = pd.to_numeric(df['Discharge (cfs)'], errors='coerce')
         df['Forecast Level'] = pd.to_numeric(df['Forecast Level'], errors='coerce')
         df['Forecast Date'] = df['Forecast Date'].astype(str)
         
         # DEBUG: Check forecast data before aggregation
         print(f"  [DEBUG] Total rows in spreadsheet: {len(df)}")
-        print(f"  [DEBUG] Forecast Level column type: {df['Forecast Level'].dtype}")
-        print(f"  [DEBUG] Sample Forecast Level values: {df['Forecast Level'].head(10).tolist()}")
-        print(f"  [DEBUG] Forecast Date column type: {df['Forecast Date'].dtype}")
-        print(f"  [DEBUG] Sample Forecast Date values: {df['Forecast Date'].head(10).tolist()}")
+        print(f"  [DEBUG] Discharge (cfs) column type: {df['Discharge (cfs)'].dtype}")
+        print(f"  [DEBUG] Non-null discharge values: {df['Discharge (cfs)'].notna().sum()}")
         
-        forecast_check = df[df['Forecast Level'].notna()]
-        if not forecast_check.empty:
-            print(f"  ✓ Found {len(forecast_check)} rows with forecast data before aggregation")
-            print(f"    Latest forecast: {forecast_check.iloc[-1]['Forecast Level']} ft on {forecast_check.iloc[-1]['Forecast Date']}")
-        else:
-            print(f"  ⚠ No forecast data found in raw data (all NaN)")
-        
-        # DEBUG: Check what dates we have BEFORE aggregation
-        print(f"\n  [DEBUG] BEFORE aggregation:")
-        print(f"    Total rows: {len(df)}")
-        print(f"    Date range: {df['Date'].min()} to {df['Date'].max()}")
-        print(f"    Rows with non-null dates: {df['Date'].notna().sum()}")
-        queens_bay_col = "Queen's Bay (ft)"
-        print(f"    Rows with non-null Queen's Bay: {df[queens_bay_col].notna().sum()}")
-        recent_before = df[df['Date'] >= '2025-11-14']
-        print(f"    Rows from Nov 14 onwards: {len(recent_before)}")
-        if len(recent_before) > 0:
-            print(f"    Sample:")
-            sample_data = recent_before[['Date', queens_bay_col]].head(5)
-            print(f"    {sample_data.to_string()}")
+        discharge_sample = df[df['Discharge (cfs)'].notna()].tail(5)
+        if len(discharge_sample) > 0:
+            print(f"  [DEBUG] Sample discharge values:")
+            print(f"    {discharge_sample[['Date_str', 'Discharge (cfs)']].to_string()}")
         
         # Aggregate daily data
         daily_data = df.groupby('Date').agg({
             "Queen's Bay (ft)": 'mean',
-            'Forecast Level': 'last',  # Changed from 'first' to 'last' to get most recent
-            'Forecast Date': 'last'     # Changed from 'first' to 'last' to get most recent
+            'Discharge (cfs)': 'mean',  # Average discharge for the day
+            'Forecast Level': 'last',
+            'Forecast Date': 'last'
         }).reset_index()
         
-        # DEBUG: Check forecast data after aggregation
-        forecast_check_agg = daily_data[daily_data['Forecast Level'].notna()]
-        if not forecast_check_agg.empty:
-            print(f"  ✓ {len(forecast_check_agg)} days with forecast data after aggregation")
-        else:
-            print(f"  ⚠ No forecast data after aggregation (lost in groupby)")
-        
-        # DEBUG: Check what dates we have AFTER aggregation
-        print(f"\n  [DEBUG] AFTER aggregation:")
-        print(f"    Total days: {len(daily_data)}")
-        print(f"    Date range: {daily_data['Date'].min()} to {daily_data['Date'].max()}")
-        recent_after = daily_data[daily_data['Date'] >= '2025-11-14']
-        print(f"    Days from Nov 14 onwards: {len(recent_after)}")
-        if len(recent_after) > 0:
-            print(f"    Sample:")
-            queens_bay_col = "Queen's Bay (ft)"
-            sample_after = recent_after[['Date', queens_bay_col]].head(5)
-            print(f"    {sample_after.to_string()}")
-        else:
-            print(f"    ⚠️ NO DATA FROM NOV 14 ONWARDS AFTER AGGREGATION!")
+        # DEBUG: Check discharge after aggregation
+        discharge_check = daily_data[daily_data['Discharge (cfs)'].notna()]
+        print(f"  ✓ {len(discharge_check)} days with discharge data after aggregation")
+        if len(discharge_check) > 0:
+            print(f"    Latest discharge: {discharge_check.iloc[-1]['Discharge (cfs)']} cfs on {discharge_check.iloc[-1]['Date']}")
         
         daily_data = daily_data.dropna(subset=["Queen's Bay (ft)"])
         
@@ -348,28 +320,50 @@ def create_lake_chart():
         
         print(f"  ✓ Processing {len(daily_data)} days of data")
         
-        # DEBUG: Show recent 2025 data specifically
-        current_year = datetime.now().year
-        data_2025 = daily_data[daily_data['Date'].dt.year == current_year].copy()
-        if len(data_2025) > 0:
-            print(f"\n  [DEBUG] 2025 data found: {len(data_2025)} days")
-            print(f"  [DEBUG] Date range: {data_2025['Date'].min()} to {data_2025['Date'].max()}")
-            print(f"  [DEBUG] Last 5 days of 2025 data:")
-            recent_2025 = data_2025.tail(5)[['Date', "Queen's Bay (ft)"]]
-            print(f"  {recent_2025.to_string()}")
-        else:
-            print(f"  [WARNING] No 2025 data found in daily_data!")
-        
         # Add year, month_day columns for multi-year plotting
         daily_data['year'] = daily_data['Date'].dt.year
         daily_data['month_day'] = daily_data['Date'].dt.strftime('%m-%d')
         
-        # Create figure (larger for more data)
-        fig, ax = plt.subplots(figsize=(16, 9), dpi=100)
+        # ========== CREATE FIGURE WITH SECONDARY Y-AXIS ==========
+        fig, ax1 = plt.subplots(figsize=(16, 9), dpi=100)
+        ax2 = ax1.twinx()  # Create secondary y-axis for discharge
         
         current_year = datetime.now().year
         date_range = pd.date_range(f'{current_year}-01-01', f'{current_year}-12-31', freq='D')
         
+        # ========== PLOT DISCHARGE BARS FIRST (BACKGROUND, SECONDARY AXIS) ==========
+        discharge_data = daily_data[daily_data['year'] == current_year].copy()
+        discharge_data = discharge_data[discharge_data['Discharge (cfs)'].notna()]
+        
+        if len(discharge_data) > 0:
+            # Convert dates for plotting
+            discharge_data['plot_date'] = discharge_data['month_day'].apply(
+                lambda x: safe_date_convert(x, current_year)
+            )
+            discharge_data = discharge_data.dropna(subset=['plot_date']).sort_values('plot_date')
+            
+            # Plot discharge as bars on secondary axis
+            ax2.bar(discharge_data['plot_date'], discharge_data['Discharge (cfs)'],
+                   width=0.8, color='lightblue', alpha=0.3, 
+                   label='Discharge (cfs)', zorder=0, edgecolor='none')
+            
+            ax2.set_ylabel('Discharge (cubic feet/second)', fontsize=12, fontweight='bold', color='steelblue')
+            ax2.tick_params(axis='y', labelcolor='steelblue')
+            
+            # Set y-axis limits with some headroom
+            max_discharge = discharge_data['Discharge (cfs)'].max()
+            ax2.set_ylim(0, max_discharge * 1.2)
+            
+            print(f"  ✓ Plotted {len(discharge_data)} discharge bars (range: {discharge_data['Discharge (cfs)'].min():.0f}-{max_discharge:.0f} cfs)")
+        else:
+            print(f"  ⚠ No discharge data available for {current_year}")
+            # Still set up ax2 but with empty range
+            ax2.set_ylabel('Discharge (cubic feet/second)', fontsize=12, fontweight='bold', color='steelblue')
+            ax2.set_ylim(0, 50000)
+        
+        # ========== NOW PLOT ALL LAKE LEVEL DATA ON PRIMARY AXIS (ORIGINAL CODE) ==========
+        
+        # ========== NOW PLOT ALL LAKE LEVEL DATA ON PRIMARY AXIS (ORIGINAL CODE) ==========
         # Define the years to plot
         highest_years = [2012, 2018]
         lowest_years = [2008, 2002]
@@ -386,7 +380,7 @@ def create_lake_chart():
             historical_range = historical_range.dropna(subset=['plot_date']).sort_values('plot_date')
             
             # Plot shaded historical range
-            ax.fill_between(historical_range['plot_date'], 
+            ax1.fill_between(historical_range['plot_date'], 
                             historical_range['min'], 
                             historical_range['max'],
                             color='#CCCCCC', alpha=0.5, label='Historical Range (1991-2024)', zorder=1)
@@ -427,7 +421,7 @@ def create_lake_chart():
                 year_data = year_data.dropna(subset=['plot_date']).sort_values('plot_date')
                 
                 if len(year_data) > 0:
-                    ax.plot(year_data['plot_date'], year_data['Queen\'s Bay (ft)'],
+                    ax1.plot(year_data['plot_date'], year_data['Queen\'s Bay (ft)'],
                            color=colors.get(year, '#000000'),
                            linewidth=linewidths.get(year, 1.5),
                            label=str(year),
@@ -509,7 +503,7 @@ def create_lake_chart():
                     if forecast_plot_date:
                         # Add black triangle (only label first one to avoid legend clutter)
                         label = 'Fortis Forecast' if forecast_count == 0 else None
-                        ax.scatter([forecast_plot_date], [forecast_level], 
+                        ax1.scatter([forecast_plot_date], [forecast_level], 
                                   marker='^', s=150, color='black', 
                                   label=label, 
                                   zorder=4, edgecolors='white', linewidths=1.5)
@@ -547,37 +541,42 @@ def create_lake_chart():
             
             if latest_plot_date and pd.notna(latest_level):
                 # Add a circle marker at the latest point
-                ax.scatter([latest_plot_date], [latest_level], 
+                ax1.scatter([latest_plot_date], [latest_level], 
                           marker='o', s=100, color='#FF0000', 
                           label=f'Latest: {latest_date.strftime("%b %d")}',
                           zorder=5, edgecolors='white', linewidths=2)
                 print(f"  ✓ Added 'Latest Data' marker at {latest_date.strftime('%b %d')}: {latest_level} ft")
         
         # Reference lines
-        ax.axhline(y=1752, color='#FF0000', linestyle='--', linewidth=1.5, 
+        ax1.axhline(y=1752, color='#FF0000', linestyle='--', linewidth=1.5, 
                    alpha=0.7, label='Flood Level (1752 ft)', zorder=1)
         
         # Add text annotation for record high
-        ax.text(0.98, 0.98, 'Record High since Duncan Dam completed 1967 >> 1754.24 ft in 1974',
-                transform=ax.transAxes, fontsize=9, ha='right', va='top',
+        ax1.text(0.98, 0.98, 'Record High since Duncan Dam completed 1967 >> 1754.24 ft in 1974',
+                transform=ax1.transAxes, fontsize=9, ha='right', va='top',
                 bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
         
         # Styling
-        ax.set_xlabel('', fontsize=13, fontweight='bold')
-        ax.set_ylabel('daily elevation (feet) @ Queens Bay', fontsize=12, fontweight='bold')
-        ax.set_title('KOOTENAY LAKE LEVELS', fontsize=18, fontweight='bold', pad=20)
-        ax.grid(True, alpha=0.3, linestyle='-', linewidth=0.5)
-        ax.legend(loc='upper left', fontsize=9, framealpha=0.95, ncol=3)
+        ax1.set_xlabel('', fontsize=13, fontweight='bold')
+        ax1.set_ylabel('daily elevation (feet) @ Queens Bay', fontsize=12, fontweight='bold')
+        ax1.set_title('KOOTENAY LAKE LEVELS', fontsize=18, fontweight='bold', pad=20)
+        ax1.grid(True, alpha=0.3, linestyle='-', linewidth=0.5)
+        
+        # Combine legends from both axes
+        lines1, labels1 = ax1.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax1.legend(lines1 + lines2, labels1 + labels2, 
+                  loc='upper left', fontsize=9, framealpha=0.95, ncol=3)
         
         # Format x-axis
-        ax.xaxis.set_major_locator(mdates.MonthLocator())
-        ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%b'))
-        ax.xaxis.set_minor_locator(mdates.WeekdayLocator(interval=1))
+        ax1.xaxis.set_major_locator(mdates.MonthLocator())
+        ax1.xaxis.set_major_formatter(mdates.DateFormatter('%d-%b'))
+        ax1.xaxis.set_minor_locator(mdates.WeekdayLocator(interval=1))
         plt.xticks(rotation=45, ha='right')
         
         # Set axis limits
-        ax.set_ylim(1737, 1755)
-        ax.set_xlim(date_range[0], date_range[-1])
+        ax1.set_ylim(1737, 1755)
+        ax1.set_xlim(date_range[0], date_range[-1])
         
         plt.tight_layout()
         
@@ -587,7 +586,7 @@ def create_lake_chart():
         # Save with MAXIMUM robustness
         print(f"  → Saving chart to {chart_path}...")
         plt.savefig(chart_path, dpi=150, bbox_inches='tight', facecolor='white')
-        plt.close('all')  # Close all figures explicitly
+        plt.close('all')
         
         # Force matplotlib to flush
         import gc
@@ -624,8 +623,9 @@ def create_lake_chart():
         import traceback
         traceback.print_exc()
         return False
+
 def generate_lake_page(lake_data):
-    """Generate STATIC lake.html page - NO DUPLICATION!"""
+    """Generate STATIC lake.html page"""
     print("\n[HTML] Generating lake page (static)...")
     
     os.makedirs('public', exist_ok=True)
@@ -830,7 +830,7 @@ def generate_lake_page(lake_data):
       </div>
       
       <div class="chart-section">
-        <h2>Historical Lake Level Trend</h2>
+        <h2>Historical Lake Level Trend with Discharge Data</h2>
         <div class="chart-container">
           <img src="lake_chart_{datetime.now().strftime('%Y-%m-%d')}.png" alt="Kootenay Lake Level Chart">
         </div>
@@ -846,12 +846,11 @@ def generate_lake_page(lake_data):
 </body>
 </html>"""
     
-    # Write the file - THIS REPLACES THE ENTIRE FILE (no duplication!)
+    # Write the file
     with open('public/lake.html', 'w', encoding='utf-8') as f:
         f.write(html)
     
     print(f"  ✓ Lake page generated: public/lake.html ({len(html)} characters)")
-    print("  ✓ NO duplication - file completely replaced each time!")
 
 # ============================================================================
 # MAIN EXECUTION
@@ -859,7 +858,7 @@ def generate_lake_page(lake_data):
 
 def main():
     print("=" * 70)
-    print("BIRCHDALE WEATHER & LAKE MONITOR")
+    print("BIRCHDALE WEATHER & LAKE MONITOR (WITH DISCHARGE BARS)")
     print("=" * 70)
     
     try:
@@ -876,17 +875,16 @@ def main():
             except Exception as e:
                 print(f"  ⚠ Could not write to Google Sheets: {e}")
         
-        # Generate chart with BLACK TRIANGLE forecast marker
+        # Generate chart with discharge bars
         create_lake_chart()
         
-        # Generate SEPARATE lake page (no duplication!)
+        # Generate lake page
         generate_lake_page(lake_data)
         
         print("\n" + "=" * 70)
         print("✓ ALL TASKS COMPLETED SUCCESSFULLY")
         print("✓ Lake page (static): public/lake.html")
-        print(f"✓ Lake chart: public/lake_chart_{datetime.now().strftime('%Y-%m-%d')}.png")
-        print("✓ Weather page (dynamic): index.html unchanged")
+        print(f"✓ Lake chart with discharge: public/lake_chart_{datetime.now().strftime('%Y-%m-%d')}.png")
         print("=" * 70)
         
     except Exception as e:
