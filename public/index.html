@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Birchdale Weather Report</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -39,6 +41,16 @@
     .precip-section.none { background: #f5f5f5; border-left-color: #999; }
     .precip-title { font-size: 13px; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
     .precip-value { font-size: 20px; font-weight: 600; color: #333; }
+    
+    /* 24-HOUR CHART SECTION */
+    .chart-section { padding: 30px; border-top: 2px solid #eee; background: #f8f9fa; }
+    .chart-title { font-size: 22px; color: #667eea; margin-bottom: 20px; font-weight: 600; text-align: center; }
+    .chart-container { position: relative; height: 400px; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 15px; }
+    .chart-legend { background: white; padding: 15px; border-radius: 8px; font-size: 12px; color: #666; }
+    .chart-legend-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+    .chart-legend-item { display: flex; align-items: center; gap: 8px; }
+    .chart-legend-color { width: 16px; height: 16px; border-radius: 3px; }
+    
     .forecast-section { padding: 30px; border-top: 2px solid #eee; }
     .forecast-title { font-size: 22px; color: #667eea; margin-bottom: 20px; font-weight: 600; text-align: center; }
     .hourly-forecast { display: flex; gap: 12px; overflow-x: auto; padding: 10px 0; }
@@ -81,6 +93,7 @@
       .details { grid-template-columns: repeat(2, 1fr); }
       .hour-card { flex: 0 0 120px; }
       .day-card { min-width: 130px; padding: 12px; }
+      .chart-container { height: 350px; }
     }
   </style>
 </head>
@@ -95,6 +108,42 @@
       <div class="loading">
         <div class="spinner"></div>
         <p style="color: #666; margin-top: 15px;">Loading current weather...</p>
+      </div>
+    </div>
+    
+    <!-- 24-HOUR CHART SECTION -->
+    <div id="chart-section" class="chart-section" style="display: none;">
+      <div class="chart-title">📊 24-Hour Weather Forecast</div>
+      <div class="chart-container">
+        <canvas id="weatherChart"></canvas>
+      </div>
+      <div class="chart-legend">
+        <div class="chart-legend-grid">
+          <div class="chart-legend-item">
+            <div class="chart-legend-color" style="background: #667eea;"></div>
+            <span>Temperature (°C)</span>
+          </div>
+          <div class="chart-legend-item">
+            <div class="chart-legend-color" style="background: #a8d5e2;"></div>
+            <span>Wind Speed (km/h)</span>
+          </div>
+          <div class="chart-legend-item">
+            <div class="chart-legend-color" style="background: rgba(168, 213, 226, 0.3);"></div>
+            <span>Wind Gust Area</span>
+          </div>
+          <div class="chart-legend-item">
+            <div class="chart-legend-color" style="background: #548c2f;"></div>
+            <span>Rain (mm)</span>
+          </div>
+          <div class="chart-legend-item">
+            <div class="chart-legend-color" style="background: #ddd; border: 2px solid #a8d5e2;"></div>
+            <span>Snow (mm)</span>
+          </div>
+          <div class="chart-legend-item">
+            <div class="chart-legend-color" style="background: #104911;"></div>
+            <span>Wind Direction ▲</span>
+          </div>
+        </div>
       </div>
     </div>
     
@@ -120,6 +169,8 @@
   </div>
 
   <script>
+    let weatherChart = null; // Store chart instance
+    
     function getCardinalDirection(deg) {
       if (deg === null || deg === undefined) return "—";
       const dirs = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
@@ -162,9 +213,263 @@
       return rain + snow;
     }
     
+    function create24HourChart(hourlyData) {
+      const ctx = document.getElementById('weatherChart');
+      if (!ctx) return;
+      
+      // Destroy existing chart if it exists
+      if (weatherChart) {
+        weatherChart.destroy();
+      }
+      
+      // Prepare data arrays
+      const labels = [];
+      const temperatures = [];
+      const windSpeeds = [];
+      const windGusts = [];
+      const windDirections = [];
+      const rainPrecip = [];
+      const snowPrecip = [];
+      
+      // Get 24 hours of data
+      for (let i = 0; i < 24 && i < hourlyData.length; i++) {
+        const hour = hourlyData[i];
+        labels.push(formatHourTime(hour.dt));
+        temperatures.push(hour.temp);
+        windSpeeds.push(hour.wind_speed * 3.6); // m/s to km/h
+        windGusts.push((hour.wind_gust || hour.wind_speed) * 3.6);
+        windDirections.push(getCardinalDirection(hour.wind_deg));
+        
+        // Separate rain and snow
+        const rain = hour.rain ? (hour.rain['1h'] || 0) : 0;
+        const snow = hour.snow ? (hour.snow['1h'] || 0) : 0;
+        rainPrecip.push(rain);
+        snowPrecip.push(snow);
+      }
+      
+      // Create chart
+      weatherChart = new Chart(ctx.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            // Temperature line
+            {
+              label: 'Temperature (°C)',
+              data: temperatures,
+              borderColor: '#667eea',
+              backgroundColor: 'transparent',
+              borderWidth: 3,
+              fill: false,
+              yAxisID: 'y',
+              tension: 0.4,
+              pointRadius: 0,
+              pointHoverRadius: 6,
+              order: 2
+            },
+            // Wind speed line
+            {
+              label: 'Wind Speed (km/h)',
+              data: windSpeeds,
+              borderColor: '#a8d5e2',
+              backgroundColor: 'rgba(168, 213, 226, 0.3)',
+              borderWidth: 2,
+              fill: '+1',
+              yAxisID: 'y1',
+              tension: 0.4,
+              pointRadius: 0,
+              pointHoverRadius: 5,
+              order: 3
+            },
+            // Wind gusts line
+            {
+              label: 'Wind Gusts (km/h)',
+              data: windGusts,
+              borderColor: '#a8d5e2',
+              backgroundColor: 'transparent',
+              borderWidth: 2,
+              borderDash: [5, 5],
+              fill: false,
+              yAxisID: 'y1',
+              tension: 0.4,
+              pointRadius: 0,
+              pointHoverRadius: 4,
+              order: 2
+            },
+            // Rain bars
+            {
+              label: 'Rain (mm)',
+              data: rainPrecip,
+              type: 'bar',
+              backgroundColor: 'rgba(84, 140, 47, 0.6)',
+              borderColor: 'rgba(84, 140, 47, 1)',
+              borderWidth: 1,
+              yAxisID: 'y1',
+              barThickness: 10,
+              order: 4
+            },
+            // Snow bars
+            {
+              label: 'Snow (mm)',
+              data: snowPrecip,
+              type: 'bar',
+              backgroundColor: 'rgba(220, 220, 220, 0.8)',
+              borderColor: '#a8d5e2',
+              borderWidth: 2,
+              yAxisID: 'y1',
+              barThickness: 10,
+              order: 4
+            },
+            // Wind direction markers
+            {
+              label: 'Wind Direction',
+              data: windSpeeds,
+              borderColor: '#104911',
+              backgroundColor: '#104911',
+              borderWidth: 1,
+              fill: false,
+              yAxisID: 'y1',
+              pointRadius: 6,
+              pointStyle: 'triangle',
+              showLine: false,
+              pointRotation: windDirections.map(dir => {
+                const angles = { 'N': 0, 'NNE': 22.5, 'NE': 45, 'ENE': 67.5, 'E': 90, 'ESE': 112.5, 'SE': 135, 'SSE': 157.5, 'S': 180, 'SSW': 202.5, 'SW': 225, 'WSW': 247.5, 'W': 270, 'WNW': 292.5, 'NW': 315, 'NNW': 337.5 };
+                return angles[dir] || 0;
+              }),
+              order: 1
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            mode: 'index',
+            intersect: false,
+          },
+          plugins: {
+            legend: {
+              display: false
+            },
+            tooltip: {
+              callbacks: {
+                title: function(context) {
+                  return `Time: ${context[0].label}`;
+                },
+                label: function(context) {
+                  const datasetLabel = context.dataset.label;
+                  const value = context.parsed.y.toFixed(1);
+                  
+                  if (datasetLabel === 'Wind Direction') {
+                    const dir = windDirections[context.dataIndex];
+                    return `Wind Direction: ${dir}`;
+                  }
+                  
+                  return `${datasetLabel}: ${value}`;
+                }
+              },
+              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              padding: 12,
+              titleFont: { size: 13, weight: 'bold' },
+              bodyFont: { size: 12 }
+            },
+            annotation: {
+              annotations: {
+                highWindLine: {
+                  type: 'line',
+                  yMin: 12,
+                  yMax: 12,
+                  yScaleID: 'y1',
+                  borderColor: '#ffd449',
+                  borderWidth: 2,
+                  borderDash: [8, 4],
+                  label: {
+                    display: true,
+                    content: 'High Wind (12 km/h)',
+                    position: 'end',
+                    backgroundColor: '#ffd449',
+                    color: '#104911',
+                    font: {
+                      size: 10,
+                      weight: 'bold'
+                    },
+                    padding: 3
+                  }
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: {
+                display: true,
+                color: 'rgba(0, 0, 0, 0.05)'
+              },
+              ticks: {
+                maxRotation: 45,
+                minRotation: 45,
+                font: {
+                  size: 10
+                }
+              }
+            },
+            y: {
+              type: 'linear',
+              display: true,
+              position: 'left',
+              title: {
+                display: true,
+                text: 'Temperature (°C)',
+                color: '#667eea',
+                font: {
+                  size: 12,
+                  weight: 'bold'
+                }
+              },
+              grid: {
+                color: 'rgba(102, 126, 234, 0.1)'
+              },
+              ticks: {
+                color: '#667eea',
+                font: {
+                  weight: 'bold',
+                  size: 11
+                }
+              }
+            },
+            y1: {
+              type: 'linear',
+              display: true,
+              position: 'right',
+              title: {
+                display: true,
+                text: 'Wind (km/h) / Precip (mm)',
+                color: '#a8d5e2',
+                font: {
+                  size: 12,
+                  weight: 'bold'
+                }
+              },
+              grid: {
+                drawOnChartArea: false,
+              },
+              ticks: {
+                color: '#a8d5e2',
+                font: {
+                  weight: 'bold',
+                  size: 11
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+    
     async function loadWeather() {
       const content = document.getElementById('weather-content');
       const forecastSection = document.getElementById('forecast-section');
+      const chartSection = document.getElementById('chart-section');
       const hourlyForecast = document.getElementById('hourly-forecast');
       const sevenDaySection = document.getElementById('seven-day-section');
       const sevenDayForecast = document.getElementById('seven-day-forecast');
@@ -172,6 +477,7 @@
       
       content.innerHTML = '<div class="loading"><div class="spinner"></div><p style="color: #666; margin-top: 15px;">Loading current weather...</p></div>';
       forecastSection.style.display = 'none';
+      chartSection.style.display = 'none';
       sevenDaySection.style.display = 'none';
       
       try {
@@ -226,6 +532,10 @@
             <div class="detail-item"><div class="detail-label">Cloud Cover</div><div class="detail-value">${current.clouds}%</div></div>
           </div>
         `;
+        
+        // Create 24-hour chart
+        create24HourChart(hourly);
+        chartSection.style.display = 'block';
         
         hourlyForecast.innerHTML = '';
         for (let i = 0; i < 12 && i < hourly.length; i++) {
