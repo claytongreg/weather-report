@@ -213,6 +213,54 @@
       return rain + snow;
     }
     
+    // Custom arrow plugin for wind direction
+    const windArrowPlugin = {
+      id: 'windArrowPlugin',
+      afterDatasetsDraw: function(chart) {
+        const ctx = chart.ctx;
+        const meta = chart.getDatasetMeta(5); // Wind direction dataset (index 5)
+        
+        if (!meta || !meta.data) return;
+        
+        meta.data.forEach((point, index) => {
+          if (!point || point.skip) return;
+          
+          const x = point.x;
+          const y = point.y;
+          const windDir = chart.data.datasets[5].windDirections[index];
+          
+          // Convert wind direction to angle
+          const angles = { 
+            'N': 0, 'NNE': 22.5, 'NE': 45, 'ENE': 67.5, 
+            'E': 90, 'ESE': 112.5, 'SE': 135, 'SSE': 157.5,
+            'S': 180, 'SSW': 202.5, 'SW': 225, 'WSW': 247.5,
+            'W': 270, 'WNW': 292.5, 'NW': 315, 'NNW': 337.5
+          };
+          const angle = angles[windDir] || 0;
+          
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.rotate((angle * Math.PI) / 180);
+          
+          // Draw arrow shape (pointing up = North)
+          ctx.fillStyle = '#104911';
+          ctx.strokeStyle = '#104911';
+          ctx.lineWidth = 1;
+          
+          ctx.beginPath();
+          ctx.moveTo(0, -10);   // tip (pointing direction)
+          ctx.lineTo(-5, 5);    // left base
+          ctx.lineTo(0, 1);     // center notch
+          ctx.lineTo(5, 5);     // right base
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+          
+          ctx.restore();
+        });
+      }
+    };
+    
     function create24HourChart(hourlyData) {
       const ctx = document.getElementById('weatherChart');
       if (!ctx) return;
@@ -320,22 +368,16 @@
               barThickness: 10,
               order: 4
             },
-            // Wind direction markers
+            // Wind direction markers (custom arrows)
             {
               label: 'Wind Direction',
               data: windSpeeds,
-              borderColor: '#104911',
-              backgroundColor: '#104911',
-              borderWidth: 1,
-              fill: false,
-              yAxisID: 'y1',
-              pointRadius: 6,
-              pointStyle: 'triangle',
+              windDirections: windDirections, // Store directions for plugin
+              borderColor: 'transparent',
+              backgroundColor: 'transparent',
+              pointRadius: 0, // Hide default markers
               showLine: false,
-              pointRotation: windDirections.map(dir => {
-                const angles = { 'N': 0, 'NNE': 22.5, 'NE': 45, 'ENE': 67.5, 'E': 90, 'ESE': 112.5, 'SE': 135, 'SSE': 157.5, 'S': 180, 'SSW': 202.5, 'SW': 225, 'WSW': 247.5, 'W': 270, 'WNW': 292.5, 'NW': 315, 'NNW': 337.5 };
-                return angles[dir] || 0;
-              }),
+              yAxisID: 'y1',
               order: 1
             }
           ]
@@ -462,7 +504,8 @@
               }
             }
           }
-        }
+        },
+        plugins: [windArrowPlugin]
       });
     }
     
