@@ -410,7 +410,7 @@
       id: 'windArrowPlugin',
       afterDatasetsDraw: function(chart) {
         const ctx = chart.ctx;
-        const meta = chart.getDatasetMeta(5); // Wind direction dataset (index 5)
+        const meta = chart.getDatasetMeta(6); // Wind direction dataset (index 6 - was 5, now 6 due to cloud cover)
         
         if (!meta || !meta.data) return;
         
@@ -419,7 +419,7 @@
           
           const x = point.x;
           const y = point.y;
-          const windDir = chart.data.datasets[5].windDirections[index];
+          const windDir = chart.data.datasets[6].windDirections[index];
           
           // Convert wind direction to angle
           const angles = { 
