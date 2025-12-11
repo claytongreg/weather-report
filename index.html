@@ -304,7 +304,7 @@
       <div class="chart-legend">
         <div class="chart-legend-grid">
           <div class="chart-legend-item">
-            <div class="chart-legend-color" style="background: #667eea;"></div>
+            <div class="chart-legend-color" style="background: #e74c3c;"></div>
             <span>Temperature (°C)</span>
           </div>
           <div class="chart-legend-item">
@@ -312,11 +312,11 @@
             <span>Freezing Line (0°C)</span>
           </div>
           <div class="chart-legend-item">
-            <div class="chart-legend-color" style="background: #a8d5e2;"></div>
+            <div class="chart-legend-color" style="background: #3498db;"></div>
             <span>Wind Speed (km/h)</span>
           </div>
           <div class="chart-legend-item">
-            <div class="chart-legend-color" style="background: rgba(168, 213, 226, 0.3);"></div>
+            <div class="chart-legend-color" style="background: rgba(52, 152, 219, 0.3);"></div>
             <span>Wind Gust Area</span>
           </div>
           <div class="chart-legend-item">
@@ -324,11 +324,11 @@
             <span>Cloud Cover (%)</span>
           </div>
           <div class="chart-legend-item">
-            <div class="chart-legend-color" style="background: #548c2f;"></div>
+            <div class="chart-legend-color" style="background: rgba(46, 125, 50, 0.8);"></div>
             <span>Rain (mm)</span>
           </div>
           <div class="chart-legend-item">
-            <div class="chart-legend-color" style="background: #ddd; border: 2px solid #a8d5e2;"></div>
+            <div class="chart-legend-color" style="background: #fff; border: 2px solid #2196F3;"></div>
             <span>Snow (mm)</span>
           </div>
           <div class="chart-legend-item">
@@ -501,7 +501,7 @@
             {
               label: 'Temperature (°C)',
               data: temperatures,
-              borderColor: '#667eea',
+              borderColor: '#e74c3c',
               backgroundColor: 'transparent',
               borderWidth: 3,
               fill: false,
@@ -529,8 +529,8 @@
             {
               label: 'Wind Speed (km/h)',
               data: windSpeeds,
-              borderColor: '#a8d5e2',
-              backgroundColor: 'rgba(168, 213, 226, 0.3)',
+              borderColor: '#3498db',
+              backgroundColor: 'rgba(52, 152, 219, 0.3)',
               borderWidth: 2,
               fill: '+1',
               yAxisID: 'y1',
@@ -543,7 +543,7 @@
             {
               label: 'Wind Gusts (km/h)',
               data: windGusts,
-              borderColor: '#a8d5e2',
+              borderColor: '#3498db',
               backgroundColor: 'transparent',
               borderWidth: 2,
               borderDash: [5, 5],
@@ -559,11 +559,11 @@
               label: 'Rain (mm)',
               data: rainPrecip,
               type: 'bar',
-              backgroundColor: 'rgba(84, 140, 47, 0.6)',
-              borderColor: 'rgba(84, 140, 47, 1)',
-              borderWidth: 1,
+              backgroundColor: 'rgba(46, 125, 50, 0.8)',
+              borderColor: 'rgba(46, 125, 50, 1)',
+              borderWidth: 2,
               yAxisID: 'y1',
-              barThickness: 10,
+              barThickness: 15,
               order: 4
             },
             // Snow bars
@@ -571,11 +571,11 @@
               label: 'Snow (mm)',
               data: snowPrecip,
               type: 'bar',
-              backgroundColor: 'rgba(220, 220, 220, 0.8)',
-              borderColor: '#a8d5e2',
-              borderWidth: 2,
+              backgroundColor: 'rgba(255, 255, 255, 0.9)',
+              borderColor: '#2196F3',
+              borderWidth: 3,
               yAxisID: 'y1',
-              barThickness: 10,
+              barThickness: 15,
               order: 4
             },
             // Wind direction markers (custom arrows)
@@ -704,17 +704,17 @@
               title: {
                 display: window.innerWidth > 768,
                 text: 'Temperature (°C)',
-                color: '#667eea',
+                color: '#e74c3c',
                 font: {
                   size: 12,
                   weight: 'bold'
                 }
               },
               grid: {
-                color: 'rgba(102, 126, 234, 0.1)'
+                color: 'rgba(231, 76, 60, 0.1)'
               },
               ticks: {
-                color: '#667eea',
+                color: '#e74c3c',
                 font: {
                   weight: 'bold',
                   size: window.innerWidth > 768 ? 11 : 9
@@ -729,7 +729,7 @@
               title: {
                 display: window.innerWidth > 768,
                 text: 'Wind (km/h) / Precip (mm)',
-                color: '#a8d5e2',
+                color: '#3498db',
                 font: {
                   size: 12,
                   weight: 'bold'
@@ -739,7 +739,7 @@
                 drawOnChartArea: false,
               },
               ticks: {
-                color: '#a8d5e2',
+                color: '#3498db',
                 font: {
                   weight: 'bold',
                   size: window.innerWidth > 768 ? 11 : 9
