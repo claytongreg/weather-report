@@ -16,15 +16,13 @@ jobs:
     
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Fetch full history to avoid shallow clone issues
       
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       
       - name: Install dependencies
-        run: pip install requests pytz beautifulsoup4 pandas matplotlib python-dateutil google-auth google-auth-oauthlib google-api-python-core
+        run: pip install requests pytz beautifulsoup4 pandas matplotlib python-dateutil google-auth google-auth-oauthlib google-api-python-client
       
       - name: Setup credentials
         run: echo "$GOOGLE_CREDENTIALS_JSON" | base64 -d > credentials.json
@@ -32,7 +30,6 @@ jobs:
       - name: Prepare and run
         run: |
           mkdir -p public
-          cp index.html public/index.html
           python main.py
       
       - name: Commit everything
@@ -40,7 +37,6 @@ jobs:
           git config --global user.name "Bot"
           git config --global user.email "bot@github.com"
           rm -f credentials.json
-          git pull --rebase origin main || echo "Pull failed, continuing..."
           git add public/
-          git commit -am "Update $(date +'%Y-%m-%d %H:%M')" || echo "No changes"
-          git push || (git pull --rebase origin main && git push)
+          git commit -m "Update lake data $(date +'%Y-%m-%d %H:%M')" || echo "No changes"
+          git push
