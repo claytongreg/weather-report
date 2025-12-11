@@ -308,12 +308,20 @@
             <span>Temperature (°C)</span>
           </div>
           <div class="chart-legend-item">
+            <div class="chart-legend-color" style="background: #3498db; height: 3px;"></div>
+            <span>Freezing Line (0°C)</span>
+          </div>
+          <div class="chart-legend-item">
             <div class="chart-legend-color" style="background: #a8d5e2;"></div>
             <span>Wind Speed (km/h)</span>
           </div>
           <div class="chart-legend-item">
             <div class="chart-legend-color" style="background: rgba(168, 213, 226, 0.3);"></div>
             <span>Wind Gust Area</span>
+          </div>
+          <div class="chart-legend-item">
+            <div class="chart-legend-color" style="background: rgba(189, 195, 199, 0.5);"></div>
+            <span>Cloud Cover (%)</span>
           </div>
           <div class="chart-legend-item">
             <div class="chart-legend-color" style="background: #548c2f;"></div>
@@ -462,6 +470,7 @@
       const windDirections = [];
       const rainPrecip = [];
       const snowPrecip = [];
+      const cloudCover = [];
       
       // Get 24 hours of data
       for (let i = 0; i < 24 && i < hourlyData.length; i++) {
@@ -477,6 +486,9 @@
         const snow = hour.snow ? (hour.snow['1h'] || 0) : 0;
         rainPrecip.push(rain);
         snowPrecip.push(snow);
+        
+        // Add cloud cover
+        cloudCover.push(hour.clouds || 0);
       }
       
       // Create chart
@@ -498,6 +510,20 @@
               pointRadius: 0,
               pointHoverRadius: 6,
               order: 2
+            },
+            // Cloud cover area
+            {
+              label: 'Cloud Cover (%)',
+              data: cloudCover,
+              backgroundColor: 'rgba(189, 195, 199, 0.5)',
+              borderColor: 'rgba(149, 165, 166, 0.8)',
+              borderWidth: 1,
+              fill: true,
+              yAxisID: 'y2',
+              tension: 0.4,
+              pointRadius: 0,
+              pointHoverRadius: 4,
+              order: 5
             },
             // Wind speed line
             {
@@ -591,6 +617,16 @@
                     return `Wind Direction: ${dir}`;
                   }
                   
+                  if (datasetLabel === 'Cloud Cover (%)') {
+                    const clouds = parseFloat(value);
+                    let desc = '';
+                    if (clouds < 20) desc = ' (Mostly Sunny ☀️)';
+                    else if (clouds < 50) desc = ' (Partly Cloudy ⛅)';
+                    else if (clouds < 80) desc = ' (Mostly Cloudy ☁️)';
+                    else desc = ' (Overcast 🌥️)';
+                    return `Cloud Cover: ${value}%${desc}`;
+                  }
+                  
                   return `${datasetLabel}: ${value}`;
                 }
               },
@@ -601,6 +637,27 @@
             },
             annotation: {
               annotations: {
+                freezingLine: {
+                  type: 'line',
+                  yMin: 0,
+                  yMax: 0,
+                  yScaleID: 'y',
+                  borderColor: '#3498db',
+                  borderWidth: 2,
+                  borderDash: [8, 4],
+                  label: {
+                    display: window.innerWidth > 768,
+                    content: 'Freezing (0°C)',
+                    position: 'start',
+                    backgroundColor: '#3498db',
+                    color: 'white',
+                    font: {
+                      size: 10,
+                      weight: 'bold'
+                    },
+                    padding: 3
+                  }
+                },
                 highWindLine: {
                   type: 'line',
                   yMin: 12,
@@ -668,6 +725,7 @@
               type: 'linear',
               display: true,
               position: 'right',
+              offset: true,
               title: {
                 display: window.innerWidth > 768,
                 text: 'Wind (km/h) / Precip (mm)',
@@ -685,6 +743,36 @@
                 font: {
                   weight: 'bold',
                   size: window.innerWidth > 768 ? 11 : 9
+                }
+              }
+            },
+            y2: {
+              type: 'linear',
+              display: true,
+              position: 'right',
+              offset: true,
+              title: {
+                display: window.innerWidth > 768,
+                text: 'Clouds %',
+                color: '#95a5a6',
+                font: {
+                  size: 12,
+                  weight: 'bold'
+                }
+              },
+              min: 0,
+              max: 100,
+              grid: {
+                drawOnChartArea: false,
+              },
+              ticks: {
+                color: '#95a5a6',
+                font: {
+                  weight: 'bold',
+                  size: window.innerWidth > 768 ? 11 : 9
+                },
+                callback: function(value) {
+                  return value + '%';
                 }
               }
             }
