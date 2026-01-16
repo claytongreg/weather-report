@@ -495,6 +495,11 @@ def create_lake_chart():
                         forecast_date = forecast_date.replace(year=current_year)
                         print(f"       Adjusted year to: {forecast_date}")
                     
+                    # FILTER: Only plot forecasts from current year
+                    if forecast_date.year != current_year:
+                        print(f"       ⊗ Skipping forecast from {forecast_date.year} (not current year {current_year})")
+                        continue
+                    
                     # Convert to plot date (align to current year x-axis)
                     forecast_month_day = forecast_date.strftime('%m-%d')
                     forecast_plot_date = safe_date_convert(forecast_month_day, current_year)
