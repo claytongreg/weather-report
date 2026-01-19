@@ -365,10 +365,18 @@ def create_lake_chart():
         
         # ========== NOW PLOT ALL LAKE LEVEL DATA ON PRIMARY AXIS (ORIGINAL CODE) ==========
         # Define the years to plot
-        highest_years = [2012, 2018]
-        lowest_years = [2008, 2002]
-        recent_years = [2020, 2021, 2022, 2023, 2024]
-        all_years = highest_years + lowest_years + recent_years + [current_year]
+        highest_years = [2012, 2018]  # Years with highest water levels
+        lowest_years = [2008, 2002]   # Years with lowest water levels
+        
+        # Automatically include last 5 years (current year + previous 4)
+        recent_years = [current_year - i for i in range(4, -1, -1)]  # [current-4, current-3, current-2, current-1, current]
+        
+        # Combine all years (extreme years + last 5 years)
+        all_years = highest_years + lowest_years + recent_years
+        
+        print(f"  [DEBUG] Years to plot: {all_years}")
+        print(f"  [DEBUG] Current year: {current_year}")
+        print(f"  [DEBUG] Recent years (last 5): {recent_years}")
         
         # Calculate historical range (1991-2024) for background shading
         range_df = daily_data[(daily_data['year'] >= 1991) & (daily_data['year'] <= 2024)].copy()
@@ -387,19 +395,30 @@ def create_lake_chart():
             print(f"  ✓ Plotted historical range shading")
         
         # Define colors and line widths for each year
+        # Fixed colors for extreme years
         colors = {
-            2012: '#00FF00', 2018: '#90EE90',
-            2008: '#FFA500', 2002: '#FFD700',
-            2020: '#00BFFF', 2021: '#1E90FF', 2022: '#0000FF', 
-            2023: '#808080', 2024: '#FF00FF',
-            current_year: '#FF0000'
+            2012: '#00FF00', 2018: '#90EE90',  # Highest years (greens)
+            2008: '#FFA500', 2002: '#FFD700',  # Lowest years (oranges/golds)
         }
         
         linewidths = {
-            2012: 2.5, 2018: 2, 2008: 2, 2002: 2,
-            2020: 1.5, 2021: 1.5, 2022: 1.5, 2023: 1.5, 2024: 1.5,
-            current_year: 3
+            2012: 2.5, 2018: 2,  # Highest years
+            2008: 2, 2002: 2,     # Lowest years
         }
+        
+        # Automatic colors for recent years (last 5 years)
+        # Colors: shades of blue progressing to red for current year
+        recent_colors = ['#00BFFF', '#1E90FF', '#0000FF', '#8B008B', '#FF00FF']  # Light blue → dark blue → purple → magenta
+        for i, year in enumerate(recent_years[:-1]):  # All except current year
+            colors[year] = recent_colors[i] if i < len(recent_colors) else '#808080'
+            linewidths[year] = 1.5
+        
+        # Current year always gets red and thick line
+        colors[current_year] = '#FF0000'
+        linewidths[current_year] = 3
+        
+        print(f"  [DEBUG] Color assignments: {colors}")
+        print(f"  [DEBUG] Line widths: {linewidths}")
         
         # Plot each year's data
         lines_plotted = 0
@@ -494,11 +513,6 @@ def create_lake_chart():
                     if forecast_date.year == 1900:
                         forecast_date = forecast_date.replace(year=current_year)
                         print(f"       Adjusted year to: {forecast_date}")
-                    
-                    # FILTER: Only plot forecasts from current year
-                    if forecast_date.year != current_year:
-                        print(f"       ⊗ Skipping forecast from {forecast_date.year} (not current year {current_year})")
-                        continue
                     
                     # Convert to plot date (align to current year x-axis)
                     forecast_month_day = forecast_date.strftime('%m-%d')
