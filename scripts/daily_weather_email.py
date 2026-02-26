@@ -141,7 +141,7 @@ def create_24hour_chart(hourly_data):
         rotated_arrow[:, 1] += wind_speed
 
         # Draw arrow as polygon
-        arrow_patch = plt.Polygon(rotated_arrow, fc='#104911', ec='#104911',
+        arrow_patch = plt.Polygon(rotated_arrow, fc='#22c55e', ec='#22c55e',
                                  linewidth=1, zorder=4)
         ax2.add_patch(arrow_patch)
 
@@ -278,68 +278,63 @@ def main():
 <head>
     <meta charset="UTF-8">
     <style>
-        body {{font-family: 'Segoe UI', sans-serif; line-height: 1.6; color: #333; max-width: 900px; margin: 0 auto; background: #f5f5f5; padding: 15px;}}
-        .container {{background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); overflow: hidden;}}
-        .header {{background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px 20px; text-align: center;}}
-        .header h1 {{margin: 0; font-size: 28px; font-weight: 700;}}
-        .header p {{margin: 8px 0 0; font-size: 14px; opacity: 0.95;}}
-        .section {{padding: 20px; border-bottom: 1px solid #eee;}}
+        body {{font-family: 'Segoe UI', -apple-system, system-ui, sans-serif; line-height: 1.6; color: #f1f5f9; max-width: 900px; margin: 0 auto; background: #0b1120; padding: 15px;}}
+        .container {{background: #1e293b; border-radius: 12px; overflow: hidden; border: 1px solid #334155;}}
+        .header {{background: linear-gradient(rgba(15,23,42,0.45), rgba(15,23,42,0.6)), url('https://birchdale-weather.netlify.app/header-bg.jpg') center/cover no-repeat; background-color: #0f172a; color: #f1f5f9; padding: 40px 20px; text-align: center; border-bottom: 1px solid #334155;}}
+        .header h1 {{margin: 0; font-size: 28px; font-weight: 700; color: #f59e0b; letter-spacing: -0.5px; text-shadow: 0 2px 8px rgba(0,0,0,0.5);}}
+        .header h2 {{margin: 6px 0 0; font-size: 14px; font-weight: 400; color: #94a3b8;}}
+        .header p {{margin: 8px 0 0; font-size: 13px; color: #94a3b8;}}
+        .section {{padding: 20px; border-bottom: 1px solid #334155;}}
         .section:last-child {{border-bottom: none;}}
-        .section h2 {{color: #667eea; font-size: 18px; margin: 0 0 15px; font-weight: 600; border-bottom: 2px solid #667eea; padding-bottom: 6px;}}
+        .section h2 {{color: #f59e0b; font-size: 16px; margin: 0 0 15px; font-weight: 600; border-bottom: 1px solid #334155; padding-bottom: 8px; letter-spacing: -0.3px;}}
 
-        /* LIVE BUTTON */
-        .live-button {{display: inline-block; background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%); color: white; padding: 12px 24px; border-radius: 25px; text-decoration: none; font-weight: 700; font-size: 16px; margin: 15px 5px; box-shadow: 0 4px 15px rgba(255,107,107,0.4); transition: all 0.3s ease;}}
-        .live-button:hover {{transform: translateY(-2px); box-shadow: 0 6px 20px rgba(255,107,107,0.6);}}
+        .live-button {{display: inline-block; background: #f59e0b; color: #0f172a; padding: 10px 22px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; margin: 12px 5px;}}
 
-        /* METRIC CARDS */
-        .current-grid, .forecast-grid {{display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between;}}
-        .metric {{flex: 1; min-width: 120px; background: #f8f9fa; padding: 12px; border-radius: 8px; border-left: 4px solid #667eea; text-align: center;}}
-        .metric-label {{font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;}}
-        .metric-value {{font-size: 20px; font-weight: 700; color: #333;}}
+        .current-grid, .forecast-grid {{display: flex; flex-wrap: wrap; gap: 10px;}}
+        .metric {{flex: 1; min-width: 110px; background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; text-align: center;}}
+        .metric-label {{font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;}}
+        .metric-value {{font-size: 18px; font-weight: 700; color: #f1f5f9;}}
 
-        /* 24-HOUR CHART */
-        .chart-section {{text-align: center; padding: 20px;}}
-        .chart-section img {{max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);}}
+        .chart-section {{text-align: center; padding: 20px; background: #0f172a;}}
+        .chart-section img {{max-width: 100%; height: auto; border-radius: 8px;}}
 
-        .wind-peak {{background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; border-radius: 8px; margin: 12px 0; font-weight: 500; font-size: 14px;}}
-        .wind-change {{background: #f8f9fa; padding: 10px; border-radius: 6px; margin: 8px 0; border-left: 3px solid #28a745; font-size: 13px;}}
-        .wind-change.decrease {{border-left-color: #17a2b8;}}
-        .wind-change-time {{font-weight: 600; color: #667eea;}}
+        .wind-peak {{background: rgba(245,158,11,0.1); border-left: 3px solid #f59e0b; padding: 12px; border-radius: 8px; margin: 12px 0; font-weight: 500; font-size: 14px; color: #f1f5f9;}}
+        .wind-change {{background: #0f172a; padding: 10px; border-radius: 6px; margin: 8px 0; border-left: 3px solid #22c55e; font-size: 13px; color: #94a3b8;}}
+        .wind-change.decrease {{border-left-color: #38bdf8;}}
+        .wind-change-time {{font-weight: 600; color: #f59e0b;}}
 
-        .scroll-table {{max-height: 400px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; margin: 12px 0;}}
+        .scroll-table {{border: 1px solid #334155; border-radius: 8px; margin: 12px 0; overflow: hidden;}}
         .combined-hourly {{width: 100%; border-collapse: collapse; font-size: 12px;}}
-        .combined-hourly th {{background: #667eea; color: white; padding: 8px; text-align: left; font-weight: 600;}}
-        .combined-hourly td {{padding: 6px 8px; border-bottom: 1px solid #eee;}}
-        .combined-hourly tr:hover {{background: #f8f9fa;}}
-        .hour-time {{font-weight: 600; color: #667eea;}}
-        .temp-cell {{font-weight: 600;}}
-        .wind-cell {{color: #667eea; font-weight: 500;}}
+        .combined-hourly th {{background: #0f172a; color: #f59e0b; padding: 8px; text-align: left; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;}}
+        .combined-hourly td {{padding: 6px 8px; border-bottom: 1px solid #334155; color: #94a3b8;}}
+        .hour-time {{font-weight: 600; color: #f59e0b;}}
+        .temp-cell {{font-weight: 600; color: #f1f5f9;}}
+        .wind-cell {{color: #38bdf8; font-weight: 500;}}
 
-        /* 7-DAY: HORIZONTAL SCROLL */
         .seven-day-container {{overflow-x: auto; white-space: nowrap; padding: 10px 0;}}
-        .seven-day {{display: inline-flex; gap: 12px;}}
-        .day-card {{background: #f8f9fa; border-radius: 10px; padding: 12px; min-width: 120px; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,0.05);}}
-        .day-date {{font-weight: 600; color: #667eea; font-size: 13px;}}
+        .seven-day {{display: inline-flex; gap: 10px;}}
+        .day-card {{background: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 12px; min-width: 120px; text-align: center;}}
+        .day-date {{font-weight: 600; color: #f59e0b; font-size: 13px;}}
         .day-icon {{width: 40px; height: 40px; margin: 6px auto;}}
         .day-temps {{font-size: 16px; font-weight: 600; margin: 6px 0;}}
-        .day-high {{color: #d35400;}}
-        .day-low {{color: #2980b9;}}
-        .day-wind {{font-size: 12px; color: #555;}}
-        .day-precip {{font-size: 11px; color: #27ae60; margin-top: 4px;}}
+        .day-high {{color: #ef4444;}}
+        .day-low {{color: #38bdf8;}}
+        .day-wind {{font-size: 12px; color: #94a3b8;}}
+        .day-precip {{font-size: 11px; color: #22c55e; margin-top: 4px;}}
 
-        .footer {{text-align: center; padding: 20px; color: #777; font-size: 13px; background: #f8f9fa;}}
-        .quote-box {{background: rgba(255,255,255,0.3); backdrop-filter: blur(10px); border-radius: 10px; padding: 15px 20px; margin-top: 15px; font-style: italic; border-left: 4px solid rgba(255,255,255,0.9);}}
-        .source {{font-size: 10px; color: #aaa; margin-top: 10px;}}
+        .footer {{text-align: center; padding: 20px; color: #64748b; font-size: 13px; background: #0f172a; border-top: 1px solid #334155;}}
+        .quote-box {{background: rgba(245,158,11,0.08); border-radius: 8px; padding: 14px 18px; margin-top: 15px; font-style: italic; border-left: 3px solid #f59e0b; color: #94a3b8; text-align: left;}}
+        .source {{font-size: 10px; color: #64748b; margin-top: 10px;}}
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>DAILY WEATHER REPORT</h1>
-            <h2>BIRCHDALE - MURPHY - SCHROEDER CREEK </h2>
+            <h2>BIRCHDALE - MURPHY - SCHROEDER CREEK</h2>
             <p>{current_time.strftime("%A, %B %d, %Y at %I:%M %p %Z")}</p>
-            <a href="https://birchdale-weather.netlify.app/" class="live-button">\U0001f324\ufe0f Click for Live Conditions</a>
-            <a href="https://birchdale-weather.netlify.app/lake.html" class="live-button">\U0001f30a Lake Level Data</a>
+            <a href="https://birchdale-weather.netlify.app/" class="live-button">Live Conditions</a>
+            <a href="https://birchdale-weather.netlify.app/lake.html" class="live-button">Lake Level Data</a>
             <p class="source">It's only a forecast, always rely on your own senses! Built by Roy - Powered by OpenWeather API</p>
             <div class="quote-box">{quote}</div>
         </div>
@@ -383,7 +378,7 @@ def main():
         <div class="section chart-section">
             <h2>24-Hour Weather Chart</h2>
             <img src="cid:weather_chart" alt="24-Hour Weather Forecast">
-            <p style="font-size: 11px; color: #999; margin-top: 10px;">Temperature, Wind Speed & Gusts, Precipitation, Wind Direction</p>
+            <p style="font-size: 11px; color: #64748b; margin-top: 10px;">Temperature, Wind Speed & Gusts, Precipitation, Wind Direction</p>
         </div>
 
         <!-- WIND -->
@@ -397,13 +392,13 @@ def main():
         email_html += f"<p><strong>{len(wind_changes)} change(s):</strong></p>"
         for c in wind_changes:
             t = c['time'].strftime("%I:%M %p")
-            note = " <span style='color:#999;'>(tonight)</span>" if (c[
+            note = " <span style='color:#64748b;'>(tonight)</span>" if (c[
                                                                          'time'] - current_time).total_seconds() / 3600 > 12 else ""
             sign = "+" if c['change'] > 0 else "-"
             cls = "wind-change" if c['change'] > 0 else "wind-change decrease"
             email_html += f'<div class="{cls}"><span class="wind-change-time">{t}:</span> {sign}{abs(c["change"]):.1f} km/h{note}<br>{c["from"]:.1f} to {c["to"]:.1f} km/h from {c["dir"]}</div>'
     else:
-        email_html += '<div style="background:#f8f9fa;padding:14px;border-radius:8px;"><p>No major changes.</p>'
+        email_html += '<div style="background:#0f172a;padding:14px;border-radius:8px;border:1px solid #334155;color:#94a3b8;"><p>No major changes.</p>'
         if current_wind: email_html += f"<p>Steady ~{current_wind['wind_kmh']:.1f} km/h</p>"
         email_html += "</div>"
     email_html += """</div>
@@ -444,16 +439,16 @@ def main():
                         <div class="day-wind">{wind:.0f} km/h {wind_dir}</div>"""
         if precip > 0:
             email_html += f'<div class="day-precip">Precip: {precip:.1f} mm</div>'
-        email_html += f"<div style='font-size:10px; color:#777; margin-top:3px;'>{cond}</div></div>"
+        email_html += f"<div style='font-size:10px; color:#64748b; margin-top:3px;'>{cond}</div></div>"
     email_html += """</div>
             </div>
         </div>
 
         <!-- FOOTER -->
         <div class="footer">
-            <p><strong>Have a great day!</strong></p>
-            <p style="font-size:11px;color:#999;margin-top:8px;">Automated 24-hour report for Birchdale</p>
-             <p style="font-size:11px;color:#999;margin-top:8px;">Reply to this email to be removed from it</p>
+            <p style="color:#94a3b8;"><strong>Have a great day!</strong></p>
+            <p style="font-size:11px;color:#64748b;margin-top:8px;">Automated 24-hour report for Birchdale</p>
+            <p style="font-size:11px;color:#64748b;margin-top:8px;">Reply to this email to be removed from it</p>
         </div>
     </div>
 </body>

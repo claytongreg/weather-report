@@ -642,214 +642,271 @@ def create_lake_chart():
 def generate_lake_page(lake_data):
     """Generate STATIC lake.html page"""
     print("\n[HTML] Generating lake page (static)...")
-    
+
     os.makedirs('public', exist_ok=True)
-    
+
     # Build data cards HTML
     cards_html = ""
-    
+
     if lake_data:
         # Queen's Bay card
         if 'queens_ft' in lake_data:
             cards_html += f"""
         <div class="data-card">
-          <div class="data-card-label">QUEEN'S BAY</div>
+          <div class="data-card-label">Queen's Bay</div>
           <div class="data-card-value">{lake_data['queens_ft']}</div>
           <div class="data-card-unit">feet</div>
           <div class="data-card-subtext">({lake_data.get('queens_m', 'N/A')} m)</div>
           <div class="data-card-subtext">Updated: {lake_data.get('queens_updated', 'N/A')}</div>
         </div>
 """
-        
+
         # Nelson card
         if 'nelson_ft' in lake_data:
             cards_html += f"""
         <div class="data-card">
-          <div class="data-card-label">NELSON</div>
+          <div class="data-card-label">Nelson</div>
           <div class="data-card-value">{lake_data['nelson_ft']}</div>
           <div class="data-card-unit">feet</div>
           <div class="data-card-subtext">({lake_data.get('nelson_m', 'N/A')} m)</div>
           <div class="data-card-subtext">Updated: {lake_data.get('nelson_updated', 'N/A')}</div>
         </div>
 """
-        
+
         # Forecast card
         if 'forecast_level' in lake_data and lake_data.get('forecast_level'):
             cards_html += f"""
         <div class="data-card">
-          <div class="data-card-label">FORECAST</div>
+          <div class="data-card-label">Forecast</div>
           <div class="data-card-value">{lake_data['forecast_level']}</div>
           <div class="data-card-unit">feet</div>
           <div class="data-card-subtext">{lake_data.get('forecast_trend', '').title()} by {lake_data.get('forecast_date', 'N/A')}</div>
         </div>
 """
-        
+
         # Discharge card
         if 'discharge_cfs' in lake_data and lake_data.get('discharge_cfs'):
             cards_html += f"""
         <div class="data-card">
-          <div class="data-card-label">DISCHARGE</div>
+          <div class="data-card-label">Discharge</div>
           <div class="data-card-value">{lake_data['discharge_cfs']}</div>
           <div class="data-card-unit">cfs</div>
           <div class="data-card-subtext">{lake_data.get('discharge_location', 'N/A')}</div>
           <div class="data-card-subtext">{lake_data.get('discharge_date', 'N/A')}</div>
         </div>
 """
-    
+
     # Update time
     update_time = datetime.now(PACIFIC).strftime('%B %d, %Y at %I:%M %p PST')
-    
+
     # Generate complete HTML
     html = f"""<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Kootenay Lake Levels - Birchdale</title>
   <style>
-    * {{
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
+    :root {{
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface-hover: #334155;
+      --border: #334155;
+      --text: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent: #f59e0b;
+      --accent-hover: #d97706;
+      --shadow: 0 4px 24px rgba(0,0,0,0.4);
+      --shadow-lg: 0 20px 60px rgba(0,0,0,0.5);
     }}
+    [data-theme="light"] {{
+      --bg: #f1f5f9;
+      --surface: #ffffff;
+      --surface-hover: #f8fafc;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #94a3b8;
+      --accent: #d97706;
+      --accent-hover: #b45309;
+      --shadow: 0 4px 24px rgba(0,0,0,0.08);
+      --shadow-lg: 0 20px 60px rgba(0,0,0,0.1);
+    }}
+
+    * {{ margin: 0; padding: 0; box-sizing: border-box; }}
     body {{
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      font-family: 'Segoe UI', -apple-system, system-ui, sans-serif;
+      background: var(--bg);
       min-height: 100vh;
+      display: flex;
+      justify-content: center;
       padding: 20px;
+      transition: background 0.3s;
     }}
     .container {{
-      max-width: 1200px;
-      margin: 0 auto;
-      background: white;
-      border-radius: 20px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      max-width: 1000px;
+      width: 100%;
+      background: var(--surface);
+      border-radius: 16px;
+      box-shadow: var(--shadow-lg);
       overflow: hidden;
+      border: 1px solid var(--border);
+      transition: background 0.3s, border-color 0.3s;
     }}
     .header {{
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      padding: 30px;
+      background: linear-gradient(rgba(15, 23, 42, 0.45), rgba(15, 23, 42, 0.6)), url('header-bg.jpg') center/cover no-repeat;
+      color: #f1f5f9;
+      padding: 40px 30px;
       text-align: center;
+      position: relative;
+      border-bottom: 1px solid var(--border);
     }}
-    .header h1 {{
-      font-size: 32px;
-      margin-bottom: 10px;
+    [data-theme="light"] .header {{
+      background: linear-gradient(rgba(15, 23, 42, 0.35), rgba(15, 23, 42, 0.55)), url('header-bg.jpg') center/cover no-repeat;
     }}
-    .header p {{
-      opacity: 0.9;
-      font-size: 14px;
+    .header h1 {{ font-size: 28px; margin-bottom: 8px; font-weight: 700; letter-spacing: -0.5px; text-shadow: 0 2px 8px rgba(0,0,0,0.5); }}
+    .header p {{ opacity: 0.85; font-size: 13px; }}
+
+    .theme-toggle {{
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #f1f5f9;
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s;
     }}
+    .theme-toggle:hover {{ background: rgba(255,255,255,0.2); }}
+
     .back-link {{
       display: inline-block;
       margin-top: 15px;
       padding: 10px 20px;
-      background: rgba(255,255,255,0.2);
+      background: rgba(245, 158, 11, 0.2);
+      border: 1px solid rgba(245, 158, 11, 0.3);
       border-radius: 8px;
-      color: white;
+      color: #f59e0b;
       text-decoration: none;
+      font-weight: 500;
+      font-size: 14px;
       transition: all 0.3s;
     }}
-    .back-link:hover {{
-      background: rgba(255,255,255,0.3);
-      transform: translateY(-2px);
-    }}
-    .lake-content {{
-      padding: 30px;
-    }}
+    .back-link:hover {{ background: rgba(245, 158, 11, 0.3); }}
+
+    .lake-content {{ padding: 30px; }}
+
     .data-cards {{
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 20px;
+      gap: 14px;
       margin-bottom: 30px;
     }}
     .data-card {{
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
+      background: var(--bg);
+      border: 1px solid var(--border);
       padding: 20px;
       border-radius: 12px;
       text-align: center;
-      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+      transition: border-color 0.3s;
     }}
+    .data-card:hover {{ border-color: var(--accent); }}
     .data-card-label {{
-      font-size: 12px;
-      opacity: 0.9;
+      font-size: 11px;
+      color: var(--accent);
       text-transform: uppercase;
-      letter-spacing: 1px;
+      letter-spacing: 1.5px;
       margin-bottom: 10px;
+      font-weight: 600;
     }}
     .data-card-value {{
       font-size: 36px;
       font-weight: 700;
-      margin: 10px 0;
+      color: var(--text);
+      margin: 8px 0;
     }}
     .data-card-unit {{
-      font-size: 14px;
-      opacity: 0.8;
+      font-size: 13px;
+      color: var(--text-muted);
     }}
     .data-card-subtext {{
       font-size: 11px;
-      opacity: 0.7;
+      color: var(--text-secondary);
       margin-top: 5px;
     }}
+
     .chart-section {{
-      background: #f8f9fa;
+      background: var(--bg);
       padding: 30px;
       border-radius: 12px;
+      border: 1px solid var(--border);
       margin-bottom: 20px;
     }}
     .chart-section h2 {{
-      color: #667eea;
-      font-size: 24px;
+      color: var(--accent);
+      font-size: 18px;
       margin-bottom: 20px;
       text-align: center;
+      font-weight: 600;
+      letter-spacing: -0.3px;
     }}
     .chart-container {{
-      background: white;
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      background: #ffffff;
+      padding: 16px;
+      border-radius: 10px;
     }}
     .chart-container img {{
       width: 100%;
       height: auto;
       display: block;
-      border-radius: 8px;
+      border-radius: 6px;
     }}
+
     .update-info {{
       text-align: center;
       padding: 20px;
-      color: #666;
-      font-size: 14px;
-      border-top: 2px solid #eee;
+      color: var(--text-muted);
+      font-size: 13px;
+      border-top: 1px solid var(--border);
     }}
+    .update-info p {{ margin: 4px 0; }}
+    .update-info strong {{ color: var(--text-secondary); }}
+
     @media (max-width: 768px) {{
-      .data-cards {{
-        grid-template-columns: 1fr;
-      }}
+      .data-cards {{ grid-template-columns: 1fr; }}
+      .lake-content {{ padding: 20px; }}
     }}
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <h1>🌊 Kootenay Lake Levels</h1>
+      <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme" id="themeBtn"></button>
+      <h1>Kootenay Lake Levels</h1>
       <p>Historical Data & Forecasts</p>
-      <a href="index.html" class="back-link">← Back to Weather</a>
+      <a href="index.html" class="back-link">Back to Weather</a>
     </div>
-    
+
     <div class="lake-content">
       <div class="data-cards">
 {cards_html}
       </div>
-      
+
       <div class="chart-section">
         <h2>Historical Lake Level Trend with Discharge Data</h2>
         <div class="chart-container">
           <img src="lake_chart_{datetime.now().strftime('%Y-%m-%d')}.png" alt="Kootenay Lake Level Chart">
         </div>
       </div>
-      
+
       <div class="update-info">
         <p><strong>Data Source:</strong> FortisBC</p>
         <p><strong>Updated:</strong> {update_time}</p>
@@ -857,13 +914,28 @@ def generate_lake_page(lake_data):
       </div>
     </div>
   </div>
+
+  <script>
+    function isDark() {{ return document.documentElement.getAttribute('data-theme') !== 'light'; }}
+    function setTheme(dark) {{
+      document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+      document.getElementById('themeBtn').textContent = dark ? '\\u2600\\uFE0F' : '\\uD83C\\uDF19';
+      localStorage.setItem('theme', dark ? 'dark' : 'light');
+    }}
+    (function() {{
+      var saved = localStorage.getItem('theme');
+      if (saved) {{ setTheme(saved === 'dark'); }}
+      else {{ setTheme(window.matchMedia('(prefers-color-scheme: dark)').matches); }}
+    }})();
+    function toggleTheme() {{ setTheme(!isDark()); }}
+  </script>
 </body>
 </html>"""
-    
+
     # Write the file
     with open('public/lake.html', 'w', encoding='utf-8') as f:
         f.write(html)
-    
+
     print(f"  ✓ Lake page generated: public/lake.html ({len(html)} characters)")
 
 # ============================================================================

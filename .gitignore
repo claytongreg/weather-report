@@ -6,3 +6,5 @@ __pycache__/
 credentials.json
 wind_sms_states/
 openweather_wind_data.json
+preview_email.html
+public/signal-*.jpeg
