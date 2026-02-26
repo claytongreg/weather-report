@@ -340,7 +340,7 @@ def create_lake_chart():
             
             # Plot discharge as bars on secondary axis
             ax2.bar(discharge_data['plot_date'], discharge_data['Discharge (cfs)'],
-                   width=0.8, color='lightblue', alpha=0.3, 
+                   width=0.8, color='#87CEEB', alpha=0.4,
                    label='Discharge (cfs)', zorder=0, edgecolor='none')
             
             ax2.set_ylabel('Discharge (cubic feet/second)', fontsize=12, fontweight='bold', color='steelblue')
@@ -473,9 +473,12 @@ def create_lake_chart():
             print(f"\n  Non-null Forecast Level count: {non_null_level}")
             print(f"  Non-null Forecast Date count: {non_null_date}")
             
-        # Extract all unique forecast date + level combinations from ORIGINAL df (before aggregation)
+        # Extract unique forecast date + level combinations from CURRENT YEAR only
+        # This ensures old year's forecasts (right side of chart) are cleared when new year starts
+        current_year_mask = df['Date'].dt.year == current_year
         forecast_data = df[
-            (df['Forecast Level'].notna()) & 
+            current_year_mask &
+            (df['Forecast Level'].notna()) &
             (df['Forecast Date'].notna()) &
             (df['Forecast Date'] != '') &
             (df['Forecast Date'] != 'nan') &
