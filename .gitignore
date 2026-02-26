@@ -3,3 +3,6 @@ keys.py.ignore
 __pycache__/
 *.pyc
 .env
+credentials.json
+wind_sms_states/
+openweather_wind_data.json

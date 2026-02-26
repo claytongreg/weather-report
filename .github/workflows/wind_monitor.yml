@@ -1,0 +1,37 @@
+name: Wind Monitor (SMS Alerts)
+on:
+  schedule:
+    # Every 2 hours from 6 AM to 8 PM PST
+    # In UTC (winter): 2pm, 4pm, 6pm, 8pm, 10pm, 12am, 2am, 4am
+    - cron: '0 14,16,18,20,22,0,2,4 * * *'
+  workflow_dispatch:
+jobs:
+  check-wind:
+    runs-on: ubuntu-latest
+
+    env:
+      OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
+      TELNYX_API_KEY: ${{ secrets.TELNYX_API_KEY }}
+      TELNYX_PHONE_NUMBER: ${{ secrets.TELNYX_PHONE_NUMBER }}
+      PHONE_NUMBERS: ${{ secrets.PHONE_NUMBERS }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run wind monitor
+        run: PYTHONPATH=scripts python scripts/openweather_wind_monitor.py
+
+      - name: Upload state files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wind-sms-states
+          path: wind_sms_states/
+          retention-days: 7

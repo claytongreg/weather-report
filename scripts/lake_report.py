@@ -8,7 +8,6 @@ Birchdale Weather & Lake Monitor
 import os
 import requests
 from datetime import datetime, timedelta
-import pytz
 import re
 from bs4 import BeautifulSoup
 import pandas as pd
@@ -21,10 +20,7 @@ from googleapiclient.discovery import build
 import time
 import glob
 
-# Configuration
-LAT = 50.038417
-LON = -116.892033
-OPENWEATHER_API_KEY = os.environ.get('OPENWEATHER_API_KEY')
+from utils import LAT, LON, PACIFIC
 
 # Google Sheets Configuration
 SPREADSHEET_ID = os.environ.get('LAKE_SPREADSHEET_ID', '14U9YwogifuDUPS4qBXke2QN49nm9NGCOV3Cm9uQorHk')
@@ -701,8 +697,7 @@ def generate_lake_page(lake_data):
 """
     
     # Update time
-    pst = pytz.timezone('America/Los_Angeles')
-    update_time = datetime.now(pst).strftime('%B %d, %Y at %I:%M %p PST')
+    update_time = datetime.now(PACIFIC).strftime('%B %d, %Y at %I:%M %p PST')
     
     # Generate complete HTML
     html = f"""<!DOCTYPE html>

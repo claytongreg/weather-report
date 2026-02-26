@@ -1,0 +1,17 @@
+# Shared
+requests
+pytz
+
+# lake_report.py
+beautifulsoup4
+pandas
+matplotlib
+python-dateutil
+lxml
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+google-api-python-client
+
+# daily_weather_email.py
+numpy
