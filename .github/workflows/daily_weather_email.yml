@@ -1,7 +1,7 @@
-name: Daily Birchdale Weather Email (6am)
+name: Daily Birchdale Weather Email (5am)
 on:
   schedule:
-    - cron: '0 14 * * *'
+    - cron: '0 12 * * *'
   workflow_dispatch:
 jobs:
   send-daily-email:
