@@ -7,7 +7,7 @@ Birchdale Weather & Lake Monitor
 """
 import os
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime
 import re
 from bs4 import BeautifulSoup
 import pandas as pd
@@ -18,7 +18,6 @@ import matplotlib.dates as mdates
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 import time
-import glob
 
 from utils import LAT, LON, PACIFIC
 
@@ -206,26 +205,10 @@ def create_lake_chart():
     print(f"  [DEBUG] Current year: {datetime.now().year}")
     print(f"  [DEBUG] Current date: {datetime.now().strftime('%Y-%m-%d')}")
     
-    # Create date-stamped filename
-    today = datetime.now().strftime('%Y-%m-%d')
-    chart_filename = f'lake_chart_{today}.png'
+    # Stable filename - overwritten in place each run and served live via
+    # GitHub raw (see public/lake.html), so a new chart needs no Netlify rebuild.
+    chart_filename = 'lake_chart.png'
     chart_path = f'public/{chart_filename}'
-    
-    # Clean up old PNG files (keep only last 2 days)
-    try:
-        all_charts = glob.glob('public/lake_chart_*.png')
-        cutoff_date = datetime.now() - timedelta(days=2)
-        
-        for old_chart in all_charts:
-            # Extract date from filename (lake_chart_2025-11-16.png)
-            match = re.search(r'lake_chart_(\d{4}-\d{2}-\d{2})\.png', old_chart)
-            if match:
-                chart_date = datetime.strptime(match.group(1), '%Y-%m-%d')
-                if chart_date < cutoff_date:
-                    os.remove(old_chart)
-                    print(f"  ✓ Removed old chart: {os.path.basename(old_chart)}")
-    except Exception as e:
-        print(f"  ⚠ Could not clean up old charts: {e}")
     
     try:
         df = read_from_sheets()
@@ -642,304 +625,23 @@ def create_lake_chart():
         traceback.print_exc()
         return False
 
-def generate_lake_page(lake_data):
-    """Generate STATIC lake.html page"""
-    print("\n[HTML] Generating lake page (static)...")
+def write_lake_data(lake_data):
+    """Write daily lake data to public/lake_data.json (read client-side by lake.html)."""
+    print("\n[JSON] Writing lake data file...")
+    import json
 
     os.makedirs('public', exist_ok=True)
 
-    # Build data cards HTML
-    cards_html = ""
+    now = datetime.now(PACIFIC)
+    payload = dict(lake_data or {})
+    payload['update_time'] = now.strftime('%B %d, %Y at %I:%M %p PST')
+    payload['generated_at'] = now.isoformat()
+    payload['chart'] = 'lake_chart.png'
 
-    if lake_data:
-        # Queen's Bay card
-        if 'queens_ft' in lake_data:
-            cards_html += f"""
-        <div class="data-card">
-          <div class="data-card-label">Queen's Bay</div>
-          <div class="data-card-value">{lake_data['queens_ft']}</div>
-          <div class="data-card-unit">feet</div>
-          <div class="data-card-subtext">({lake_data.get('queens_m', 'N/A')} m)</div>
-          <div class="data-card-subtext">Updated: {lake_data.get('queens_updated', 'N/A')}</div>
-        </div>
-"""
+    with open('public/lake_data.json', 'w', encoding='utf-8') as f:
+        json.dump(payload, f, indent=2)
 
-        # Nelson card
-        if 'nelson_ft' in lake_data:
-            cards_html += f"""
-        <div class="data-card">
-          <div class="data-card-label">Nelson</div>
-          <div class="data-card-value">{lake_data['nelson_ft']}</div>
-          <div class="data-card-unit">feet</div>
-          <div class="data-card-subtext">({lake_data.get('nelson_m', 'N/A')} m)</div>
-          <div class="data-card-subtext">Updated: {lake_data.get('nelson_updated', 'N/A')}</div>
-        </div>
-"""
-
-        # Forecast card
-        if 'forecast_level' in lake_data and lake_data.get('forecast_level'):
-            cards_html += f"""
-        <div class="data-card">
-          <div class="data-card-label">Forecast</div>
-          <div class="data-card-value">{lake_data['forecast_level']}</div>
-          <div class="data-card-unit">feet</div>
-          <div class="data-card-subtext">{lake_data.get('forecast_trend', '').title()} by {lake_data.get('forecast_date', 'N/A')}</div>
-        </div>
-"""
-
-        # Discharge card
-        if 'discharge_cfs' in lake_data and lake_data.get('discharge_cfs'):
-            cards_html += f"""
-        <div class="data-card">
-          <div class="data-card-label">Discharge</div>
-          <div class="data-card-value">{lake_data['discharge_cfs']}</div>
-          <div class="data-card-unit">cfs</div>
-          <div class="data-card-subtext">{lake_data.get('discharge_location', 'N/A')}</div>
-          <div class="data-card-subtext">{lake_data.get('discharge_date', 'N/A')}</div>
-        </div>
-"""
-
-    # Update time
-    update_time = datetime.now(PACIFIC).strftime('%B %d, %Y at %I:%M %p PST')
-
-    # Generate complete HTML
-    html = f"""<!DOCTYPE html>
-<html lang="en" data-theme="dark">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Kootenay Lake Levels - Birchdale</title>
-  <style>
-    :root {{
-      --bg: #0f172a;
-      --surface: #1e293b;
-      --surface-hover: #334155;
-      --border: #334155;
-      --text: #f1f5f9;
-      --text-secondary: #94a3b8;
-      --text-muted: #64748b;
-      --accent: #f59e0b;
-      --accent-hover: #d97706;
-      --shadow: 0 4px 24px rgba(0,0,0,0.4);
-      --shadow-lg: 0 20px 60px rgba(0,0,0,0.5);
-    }}
-    [data-theme="light"] {{
-      --bg: #f1f5f9;
-      --surface: #ffffff;
-      --surface-hover: #f8fafc;
-      --border: #e2e8f0;
-      --text: #0f172a;
-      --text-secondary: #475569;
-      --text-muted: #94a3b8;
-      --accent: #d97706;
-      --accent-hover: #b45309;
-      --shadow: 0 4px 24px rgba(0,0,0,0.08);
-      --shadow-lg: 0 20px 60px rgba(0,0,0,0.1);
-    }}
-
-    * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-    body {{
-      font-family: 'Segoe UI', -apple-system, system-ui, sans-serif;
-      background: var(--bg);
-      min-height: 100vh;
-      display: flex;
-      justify-content: center;
-      padding: 20px;
-      transition: background 0.3s;
-    }}
-    .container {{
-      max-width: 1000px;
-      width: 100%;
-      background: var(--surface);
-      border-radius: 16px;
-      box-shadow: var(--shadow-lg);
-      overflow: hidden;
-      border: 1px solid var(--border);
-      transition: background 0.3s, border-color 0.3s;
-    }}
-    .header {{
-      background: linear-gradient(rgba(15, 23, 42, 0.45), rgba(15, 23, 42, 0.6)), url('header-bg.jpg') center/cover no-repeat;
-      color: #f1f5f9;
-      padding: 40px 30px;
-      text-align: center;
-      position: relative;
-      border-bottom: 1px solid var(--border);
-    }}
-    [data-theme="light"] .header {{
-      background: linear-gradient(rgba(15, 23, 42, 0.35), rgba(15, 23, 42, 0.55)), url('header-bg.jpg') center/cover no-repeat;
-    }}
-    .header h1 {{ font-size: 28px; margin-bottom: 8px; font-weight: 700; letter-spacing: -0.5px; text-shadow: 0 2px 8px rgba(0,0,0,0.5); }}
-    .header p {{ opacity: 0.85; font-size: 13px; }}
-
-    .theme-toggle {{
-      position: absolute;
-      top: 20px;
-      right: 20px;
-      background: rgba(255,255,255,0.1);
-      border: 1px solid rgba(255,255,255,0.2);
-      color: #f1f5f9;
-      width: 40px;
-      height: 40px;
-      border-radius: 10px;
-      cursor: pointer;
-      font-size: 18px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.3s;
-    }}
-    .theme-toggle:hover {{ background: rgba(255,255,255,0.2); }}
-
-    .back-link {{
-      display: inline-block;
-      margin-top: 15px;
-      padding: 10px 20px;
-      background: rgba(245, 158, 11, 0.2);
-      border: 1px solid rgba(245, 158, 11, 0.3);
-      border-radius: 8px;
-      color: #f59e0b;
-      text-decoration: none;
-      font-weight: 500;
-      font-size: 14px;
-      transition: all 0.3s;
-    }}
-    .back-link:hover {{ background: rgba(245, 158, 11, 0.3); }}
-
-    .lake-content {{ padding: 30px; }}
-
-    .data-cards {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 14px;
-      margin-bottom: 30px;
-    }}
-    .data-card {{
-      background: var(--bg);
-      border: 1px solid var(--border);
-      padding: 20px;
-      border-radius: 12px;
-      text-align: center;
-      transition: border-color 0.3s;
-    }}
-    .data-card:hover {{ border-color: var(--accent); }}
-    .data-card-label {{
-      font-size: 11px;
-      color: var(--accent);
-      text-transform: uppercase;
-      letter-spacing: 1.5px;
-      margin-bottom: 10px;
-      font-weight: 600;
-    }}
-    .data-card-value {{
-      font-size: 36px;
-      font-weight: 700;
-      color: var(--text);
-      margin: 8px 0;
-    }}
-    .data-card-unit {{
-      font-size: 13px;
-      color: var(--text-muted);
-    }}
-    .data-card-subtext {{
-      font-size: 11px;
-      color: var(--text-secondary);
-      margin-top: 5px;
-    }}
-
-    .chart-section {{
-      background: var(--bg);
-      padding: 30px;
-      border-radius: 12px;
-      border: 1px solid var(--border);
-      margin-bottom: 20px;
-    }}
-    .chart-section h2 {{
-      color: var(--accent);
-      font-size: 18px;
-      margin-bottom: 20px;
-      text-align: center;
-      font-weight: 600;
-      letter-spacing: -0.3px;
-    }}
-    .chart-container {{
-      background: #ffffff;
-      padding: 16px;
-      border-radius: 10px;
-    }}
-    .chart-container img {{
-      width: 100%;
-      height: auto;
-      display: block;
-      border-radius: 6px;
-    }}
-
-    .update-info {{
-      text-align: center;
-      padding: 20px;
-      color: var(--text-muted);
-      font-size: 13px;
-      border-top: 1px solid var(--border);
-    }}
-    .update-info p {{ margin: 4px 0; }}
-    .update-info strong {{ color: var(--text-secondary); }}
-
-    @media (max-width: 768px) {{
-      .data-cards {{ grid-template-columns: 1fr; }}
-      .lake-content {{ padding: 20px; }}
-    }}
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme" id="themeBtn"></button>
-      <h1>Kootenay Lake Levels</h1>
-      <p>Historical Data & Forecasts</p>
-      <a href="index.html" class="back-link">Back to Weather</a>
-    </div>
-
-    <div class="lake-content">
-      <div class="data-cards">
-{cards_html}
-      </div>
-
-      <div class="chart-section">
-        <h2>Historical Lake Level Trend with Discharge Data</h2>
-        <div class="chart-container">
-          <img src="lake_chart_{datetime.now().strftime('%Y-%m-%d')}.png" alt="Kootenay Lake Level Chart">
-        </div>
-      </div>
-
-      <div class="update-info">
-        <p><strong>Data Source:</strong> FortisBC</p>
-        <p><strong>Updated:</strong> {update_time}</p>
-        <p>Chart updates daily at 6 AM PST</p>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    function isDark() {{ return document.documentElement.getAttribute('data-theme') !== 'light'; }}
-    function setTheme(dark) {{
-      document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
-      document.getElementById('themeBtn').textContent = dark ? '\\u2600\\uFE0F' : '\\uD83C\\uDF19';
-      localStorage.setItem('theme', dark ? 'dark' : 'light');
-    }}
-    (function() {{
-      var saved = localStorage.getItem('theme');
-      if (saved) {{ setTheme(saved === 'dark'); }}
-      else {{ setTheme(window.matchMedia('(prefers-color-scheme: dark)').matches); }}
-    }})();
-    function toggleTheme() {{ setTheme(!isDark()); }}
-  </script>
-</body>
-</html>"""
-
-    # Write the file
-    with open('public/lake.html', 'w', encoding='utf-8') as f:
-        f.write(html)
-
-    print(f"  ✓ Lake page generated: public/lake.html ({len(html)} characters)")
+    print(f"  ✓ Lake data written: public/lake_data.json ({len(payload)} fields)")
 
 # ============================================================================
 # MAIN EXECUTION
@@ -967,13 +669,13 @@ def main():
         # Generate chart with discharge bars
         create_lake_chart()
         
-        # Generate lake page
-        generate_lake_page(lake_data)
+        # Write data file (static lake.html reads this client-side)
+        write_lake_data(lake_data)
         
         print("\n" + "=" * 70)
         print("✓ ALL TASKS COMPLETED SUCCESSFULLY")
-        print("✓ Lake page (static): public/lake.html")
-        print(f"✓ Lake chart with discharge: public/lake_chart_{datetime.now().strftime('%Y-%m-%d')}.png")
+        print("✓ Lake data (JSON): public/lake_data.json")
+        print("✓ Lake chart: public/lake_chart.png")
         print("=" * 70)
         
     except Exception as e:

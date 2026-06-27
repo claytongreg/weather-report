@@ -141,6 +141,14 @@
       margin-top: 5px;
     }
 
+    .status-msg {
+      grid-column: 1 / -1;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 14px;
+      padding: 20px;
+    }
+
     .chart-section {
       background: var(--bg);
       padding: 30px;
@@ -194,61 +202,31 @@
     </div>
 
     <div class="lake-content">
-      <div class="data-cards">
-
-        <div class="data-card">
-          <div class="data-card-label">Queen's Bay</div>
-          <div class="data-card-value">1745.34</div>
-          <div class="data-card-unit">feet</div>
-          <div class="data-card-subtext">(531.98 m)</div>
-          <div class="data-card-subtext">Updated: Jun 27 2026 07:40:02</div>
-        </div>
-
-        <div class="data-card">
-          <div class="data-card-label">Nelson</div>
-          <div class="data-card-value">1744.25</div>
-          <div class="data-card-unit">feet</div>
-          <div class="data-card-subtext">(531.65 m)</div>
-          <div class="data-card-subtext">Updated: Jun 27 2026 07:40:02</div>
-        </div>
-
-        <div class="data-card">
-          <div class="data-card-label">Forecast</div>
-          <div class="data-card-value">1744.00</div>
-          <div class="data-card-unit">feet</div>
-          <div class="data-card-subtext">Decrease by July 4, 2026</div>
-        </div>
-
-        <div class="data-card">
-          <div class="data-card-label">Discharge</div>
-          <div class="data-card-value">44212</div>
-          <div class="data-card-unit">cfs</div>
-          <div class="data-card-subtext">Brilliant</div>
-          <div class="data-card-subtext">Jun 26 2026</div>
-        </div>
-
+      <div class="data-cards" id="cards">
+        <div class="status-msg">Loading lake data&hellip;</div>
       </div>
 
       <div class="chart-section">
         <h2>Historical Lake Level Trend with Discharge Data</h2>
         <div class="chart-container">
-          <img src="lake_chart_2026-06-27.png" alt="Kootenay Lake Level Chart">
+          <img id="chartImg" src="lake_chart.png" alt="Kootenay Lake Level Chart">
         </div>
       </div>
 
       <div class="update-info">
         <p><strong>Data Source:</strong> FortisBC</p>
-        <p><strong>Updated:</strong> June 27, 2026 at 07:44 AM PST</p>
+        <p><strong>Updated:</strong> <span id="updateTime">&mdash;</span></p>
         <p>Chart updates daily at 6 AM PST</p>
       </div>
     </div>
   </div>
 
   <script>
+    // --- Theme ---
     function isDark() { return document.documentElement.getAttribute('data-theme') !== 'light'; }
     function setTheme(dark) {
       document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
-      document.getElementById('themeBtn').textContent = dark ? '\u2600\uFE0F' : '\uD83C\uDF19';
+      document.getElementById('themeBtn').textContent = dark ? '☀️' : '🌙';
       localStorage.setItem('theme', dark ? 'dark' : 'light');
     }
     (function() {
@@ -257,6 +235,79 @@
       else { setTheme(window.matchMedia('(prefers-color-scheme: dark)').matches); }
     })();
     function toggleTheme() { setTheme(!isDark()); }
+
+    // --- Live data ---
+    // Daily data is committed by the GitHub Action and read straight from the
+    // repo via GitHub's raw endpoint, so a data-only update does NOT require a
+    // Netlify rebuild. Falls back to the copy bundled with this deploy.
+    const RAW_BASE = 'https://raw.githubusercontent.com/claytongreg/weather-report/main/public/';
+
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+    function titleCase(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; }
+
+    function card(label, value, unit, subtexts) {
+      var subs = (subtexts || []).filter(Boolean).map(function(s) {
+        return '<div class="data-card-subtext">' + s + '</div>';
+      }).join('');
+      return '<div class="data-card">' +
+               '<div class="data-card-label">' + esc(label) + '</div>' +
+               '<div class="data-card-value">' + esc(value) + '</div>' +
+               '<div class="data-card-unit">' + esc(unit) + '</div>' +
+               subs +
+             '</div>';
+    }
+
+    function render(d) {
+      var cards = [];
+      if (d.queens_ft) {
+        cards.push(card("Queen's Bay", d.queens_ft, 'feet',
+          ['(' + esc(d.queens_m || 'N/A') + ' m)', 'Updated: ' + esc(d.queens_updated || 'N/A')]));
+      }
+      if (d.nelson_ft) {
+        cards.push(card('Nelson', d.nelson_ft, 'feet',
+          ['(' + esc(d.nelson_m || 'N/A') + ' m)', 'Updated: ' + esc(d.nelson_updated || 'N/A')]));
+      }
+      if (d.forecast_level) {
+        cards.push(card('Forecast', d.forecast_level, 'feet',
+          [esc(titleCase(d.forecast_trend || '')) + ' by ' + esc(d.forecast_date || 'N/A')]));
+      }
+      if (d.discharge_cfs) {
+        cards.push(card('Discharge', d.discharge_cfs, 'cfs',
+          [esc(d.discharge_location || 'N/A'), esc(d.discharge_date || 'N/A')]));
+      }
+
+      var cardsEl = document.getElementById('cards');
+      cardsEl.innerHTML = cards.length
+        ? cards.join('')
+        : '<div class="status-msg">No lake data available right now.</div>';
+
+      if (d.update_time) document.getElementById('updateTime').textContent = d.update_time;
+
+      var img = document.getElementById('chartImg');
+      var chart = d.chart || 'lake_chart.png';
+      var v = d.generated_at ? ('?v=' + encodeURIComponent(d.generated_at)) : '';
+      img.onerror = function() { img.onerror = null; img.src = chart; }; // fall back to bundled image
+      img.src = RAW_BASE + chart + v;
+    }
+
+    async function load() {
+      var sources = [RAW_BASE + 'lake_data.json?t=' + Date.now(), 'lake_data.json'];
+      for (var i = 0; i < sources.length; i++) {
+        try {
+          var res = await fetch(sources[i], { cache: 'no-store' });
+          if (!res.ok) continue;
+          render(JSON.parse(await res.text()));
+          return;
+        } catch (e) { /* try next source */ }
+      }
+      document.getElementById('cards').innerHTML =
+        '<div class="status-msg">Could not load lake data. Please try again shortly.</div>';
+    }
+    load();
   </script>
 </body>
 </html>

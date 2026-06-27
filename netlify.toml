@@ -3,9 +3,15 @@
 [build]
   # Directory to publish (where index.html and assets live)
   publish = "public"
-  
+
   # Build command (none needed - GitHub Action generates files)
   command = ""
+
+  # Skip the deploy when a commit ONLY changed the daily lake data.
+  # lake_data.json + lake_chart.png are read live from GitHub raw by
+  # public/lake.html, so they don't need a Netlify rebuild to go live.
+  # `git diff --quiet` exits 0 (cancel build) when nothing else changed.
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- . ':(exclude)public/lake_data.json' ':(exclude)public/lake_chart.png'"
 
 # Redirect rules - IMPORTANT: Only redirect non-existent files
 [[redirects]]
