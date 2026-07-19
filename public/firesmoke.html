@@ -279,10 +279,13 @@
       document.getElementById('chart').innerHTML = svg;
     }
 
-    // --- Live data load (GitHub raw with bundled fallback, mirrors lake.html) ---
+    // --- Live data load ---
+    // Built ON DEMAND by the serverless function when this page opens (reads
+    // FireSmoke.ca's NetCDF directly). Falls back to the last committed snapshot
+    // if the function is unavailable.
     var RAW_BASE = 'https://raw.githubusercontent.com/claytongreg/weather-report/main/public/';
     async function load() {
-      var sources = [RAW_BASE + 'firesmoke_data.json?t=' + Date.now(), 'firesmoke_data.json'];
+      var sources = ['/.netlify/functions/firesmoke', RAW_BASE + 'firesmoke_data.json?t=' + Date.now(), 'firesmoke_data.json'];
       for (var i = 0; i < sources.length; i++) {
         try {
           var res = await fetch(sources[i], { cache: 'no-store' });

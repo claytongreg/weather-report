@@ -22,6 +22,7 @@ import numpy as np
 import requests
 
 from utils import LAT, LON, MS_TO_KMH, OPENWEATHER_URL, ICON_BASE, PACIFIC, convert_to_pst, get_cardinal
+from firesmoke import fetch_pm25_forecast
 
 # Configuration from environment variables
 OPENWEATHER_API_KEY = os.environ.get('OPENWEATHER_API_KEY')
@@ -276,6 +277,85 @@ def build_wildfire_section(nearby_fires=None, error_message=None):
     return section
 
 
+SMOKE_PAGE_URL = "https://birchdale-weather.netlify.app/firesmoke.html"
+
+
+def _smoke_hour_label(dt):
+    """'Sat 8am' style label without platform-specific strftime codes."""
+    hour = dt.hour % 12 or 12
+    return dt.strftime('%a ') + f"{hour}{'am' if dt.hour < 12 else 'pm'}"
+
+
+def create_smoke_chart(series):
+    """Render the hourly surface-PM2.5 forecast as a PNG (email-safe image)."""
+    pm = [p['pm25'] for p in series]
+    locals_ = []
+    for p in series:
+        utc = datetime.strptime(p['time_utc'], '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
+        locals_.append(utc.astimezone(PACIFIC))
+
+    x = list(range(len(pm)))
+    fig, ax = plt.subplots(figsize=(14, 5), dpi=100)
+    ax.fill_between(x, 0, pm, color='#f59e0b', alpha=0.18, zorder=1)
+    ax.plot(x, pm, color='#f59e0b', linewidth=2.5, zorder=3)
+
+    ymax = max(10.0, max(pm) * 1.15)
+    # US EPA PM2.5 category thresholds (only those within range)
+    for thr, lbl, col in [(9.0, 'Moderate', '#eab308'),
+                          (35.4, 'Unhealthy (sensitive)', '#f97316'),
+                          (55.4, 'Unhealthy', '#ef4444')]:
+        if thr < ymax:
+            ax.axhline(thr, color=col, linestyle='--', linewidth=1, alpha=0.75, zorder=2)
+            ax.text(0.5, thr, lbl, va='bottom', ha='left', fontsize=8, color=col, zorder=4)
+
+    ax.set_ylim(0, ymax)
+    ax.set_xlim(0, len(pm) - 1)
+    ax.set_ylabel('PM2.5 (µg/m³)', fontweight='bold', fontsize=12)
+
+    ticks = [i for i, d in enumerate(locals_) if d.hour in (0, 12)]
+    ax.set_xticks(ticks)
+    ax.set_xticklabels([_smoke_hour_label(locals_[i]) for i in ticks], fontsize=9)
+    ax.grid(True, alpha=0.3, linestyle='-', linewidth=0.5, zorder=0)
+    plt.title('Wildfire Smoke Forecast – Surface PM2.5', fontsize=16, fontweight='bold', pad=16)
+    plt.tight_layout()
+
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+    buf.seek(0)
+    plt.close()
+    return buf
+
+
+def build_smoke_section(forecast=None, error_message=None):
+    """Build the daily email's wildfire-smoke section (chart embedded via CID)."""
+    if error_message or not forecast or not forecast.get('series'):
+        return """
+        <!-- WILDFIRE SMOKE -->
+        <div class="section">
+            <h2>Wildfire Smoke Forecast</h2>
+            <div class="wildfire-empty wildfire-unavailable">
+                Smoke forecast was unavailable when this report was generated.
+            </div>
+        </div>"""
+
+    first = forecast['series'][0]
+    peak = forecast['peak']
+    return f"""
+        <!-- WILDFIRE SMOKE -->
+        <div class="section">
+            <h2>Wildfire Smoke Forecast</h2>
+            <p class="wildfire-summary">
+                Now <strong>{first['pm25']:.1f} µg/m³</strong> (AQI {first['aqi']}, {first['category']})
+                &bull; Peak <strong>{peak['pm25']:.1f} µg/m³</strong> (AQI {peak['aqi']}, {peak['category']}) at {html.escape(peak['time_local'])}
+            </p>
+            <img src="cid:smoke_chart" alt="Hourly PM2.5 smoke forecast" style="width: 100%; border-radius: 8px; margin-top: 10px;">
+            <div class="wildfire-map-link">
+                <a href="{SMOKE_PAGE_URL}" class="live-button wildfire-map-button">Open Live Smoke Forecast &rarr;</a>
+            </div>
+            <p class="source">Source: FireSmoke.ca (BlueSky/HYSPLIT). AQI uses the US EPA PM2.5 scale.</p>
+        </div>"""
+
+
 def create_24hour_chart(hourly_data):
     """Generate 24-hour weather chart with temperature, wind, and precipitation"""
 
@@ -517,6 +597,21 @@ def main():
 
     wildfire_section = build_wildfire_section(nearby_wildfires, wildfire_error)
 
+    # Wildfire smoke forecast (FireSmoke.ca). Also non-fatal for the report.
+    print("Fetching wildfire smoke forecast...")
+    smoke_error = None
+    smoke_forecast = None
+    smoke_chart_buffer = None
+    try:
+        smoke_forecast = fetch_pm25_forecast()
+        smoke_chart_buffer = create_smoke_chart(smoke_forecast['series'])
+        print(f"Smoke forecast: {smoke_forecast['hours']}h, peak {smoke_forecast['peak']['pm25']} ug/m3")
+    except Exception as error:  # noqa: BLE001 - never block the email on smoke data
+        smoke_error = str(error)
+        print(f"Smoke forecast fetch failed: {error}")
+
+    smoke_section = build_smoke_section(smoke_forecast, smoke_error)
+
     # ========================================
     # BUILD HTML EMAIL
     # ========================================
@@ -602,6 +697,7 @@ def main():
             <p>{current_time.strftime("%A, %B %d, %Y at %I:%M %p %Z")}</p>
             <a href="https://birchdale-weather.netlify.app/" class="live-button">Live Conditions</a>
             <a href="https://birchdale-weather.netlify.app/lake.html" class="live-button">Lake Level Data</a>
+            <a href="https://birchdale-weather.netlify.app/firesmoke.html" class="live-button">Wildfire Smoke</a>
             <p class="source">It's only a forecast, always rely on your own senses! Built by Roy - Powered by OpenWeather API</p>
             <div class="quote-box">{quote}</div>
         </div>
@@ -712,7 +808,11 @@ def main():
     email_html += """</div>
             </div>
         </div>
+"""
 
+    email_html += smoke_section
+
+    email_html += """
         <!-- FOOTER -->
         <div class="footer">
             <p style="color:#94a3b8;"><strong>Have a great day!</strong></p>
@@ -739,6 +839,12 @@ def main():
     chart_image = MIMEImage(chart_buffer.read())
     chart_image.add_header('Content-ID', '<weather_chart>')
     msg.attach(chart_image)
+
+    # Attach smoke chart image (only if the forecast was fetched successfully)
+    if smoke_chart_buffer is not None:
+        smoke_image = MIMEImage(smoke_chart_buffer.read())
+        smoke_image.add_header('Content-ID', '<smoke_chart>')
+        msg.attach(smoke_image)
 
     try:
         with smtplib.SMTP('smtp.gmail.com', 587) as server:
