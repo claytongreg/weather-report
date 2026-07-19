@@ -11,7 +11,12 @@
   # lake_data.json + lake_chart.png + firesmoke_data.json are read live from
   # GitHub raw by their pages, so they don't need a Netlify rebuild to go live.
   # `git diff --quiet` exits 0 (cancel build) when nothing else changed.
-  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- . ':(exclude)public/lake_data.json' ':(exclude)public/lake_chart.png' ':(exclude)public/firesmoke_data.json'"
+  #
+  # Guard: if CACHED_COMMIT_REF is empty (no prior *successful* deploy to diff
+  # against), always build. Without this, the bare `git diff --quiet "" $REF`
+  # degrades to a working-tree-vs-HEAD compare that is always empty, so EVERY
+  # build gets cancelled and the site can never deploy again.
+  ignore = "[ -z \"$CACHED_COMMIT_REF\" ] && exit 1; git diff --quiet \"$CACHED_COMMIT_REF\" \"$COMMIT_REF\" -- . ':(exclude)public/lake_data.json' ':(exclude)public/lake_chart.png' ':(exclude)public/firesmoke_data.json'"
 
 # Redirect rules - IMPORTANT: Only redirect non-existent files
 [[redirects]]
