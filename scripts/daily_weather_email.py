@@ -4,18 +4,22 @@ Daily Birchdale Weather Email Report
 Fetches weather from OpenWeather API, generates HTML email with 24h chart,
 and sends via Gmail SMTP.
 """
+import html
+import io
+import math
 import os
-import requests
-from datetime import datetime, timezone
 import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+from datetime import datetime, timezone
 from email.mime.image import MIMEImage
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from urllib.parse import urlencode
+
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
-import io
+import requests
 
 from utils import LAT, LON, MS_TO_KMH, OPENWEATHER_URL, ICON_BASE, PACIFIC, convert_to_pst, get_cardinal
 
@@ -24,6 +28,18 @@ OPENWEATHER_API_KEY = os.environ.get('OPENWEATHER_API_KEY')
 EMAIL_FROM = os.environ.get('EMAIL_FROM')
 EMAIL_TO = os.environ.get('EMAIL_TO')
 EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD')
+
+WILDFIRE_RADIUS_KM = 50
+WILDFIRE_API_URL = (
+    "https://services6.arcgis.com/ubm4tcTYICKBpist/arcgis/rest/services/"
+    "BCWS_ActiveFires_PublicView/FeatureServer/0/query"
+)
+WILDFIRE_MAP_URL = "https://wildfiresituation.nrs.gov.bc.ca/map?" + urlencode({
+    "longitude": LON,
+    "latitude": LAT,
+    "activeWildfires": "true",
+    "zoom": 9,
+})
 
 
 # ========================================
@@ -38,6 +54,226 @@ def get_quote():
     except:
         pass
     return '"Every day is a new beginning." \u2014 Unknown'
+
+
+def distance_km(lat1, lon1, lat2, lon2):
+    """Return the great-circle distance between two coordinates."""
+    earth_radius_km = 6371.0088
+    lat1_rad = math.radians(lat1)
+    lat2_rad = math.radians(lat2)
+    delta_lat = math.radians(lat2 - lat1)
+    delta_lon = math.radians(lon2 - lon1)
+    haversine = (
+        math.sin(delta_lat / 2) ** 2
+        + math.cos(lat1_rad)
+        * math.cos(lat2_rad)
+        * math.sin(delta_lon / 2) ** 2
+    )
+    haversine = min(1, max(0, haversine))
+    return 2 * earth_radius_km * math.atan2(
+        math.sqrt(haversine), math.sqrt(1 - haversine)
+    )
+
+
+def fetch_nearby_wildfires(radius_km=WILDFIRE_RADIUS_KM):
+    """Fetch active BC wildfires within radius_km of Birchdale."""
+    params = {
+        "where": "FIRE_STATUS <> 'Out'",
+        "outFields": ",".join([
+            "FIRE_YEAR",
+            "FIRE_NUMBER",
+            "INCIDENT_NAME",
+            "FIRE_STATUS",
+            "FIRE_CAUSE",
+            "GEOGRAPHIC_DESCRIPTION",
+            "CURRENT_SIZE",
+            "IGNITION_DATE",
+            "LATITUDE",
+            "LONGITUDE",
+        ]),
+        "returnGeometry": "true",
+        "outSR": "4326",
+        "f": "geojson",
+    }
+    response = requests.get(WILDFIRE_API_URL, params=params, timeout=15)
+    response.raise_for_status()
+
+    payload = response.json()
+    if not isinstance(payload, dict) or payload.get("type") != "FeatureCollection":
+        raise ValueError("BC Wildfire API returned an unexpected response")
+
+    nearby_fires = []
+    for feature in payload.get("features", []):
+        if not isinstance(feature, dict):
+            continue
+        properties = feature.get("properties") or {}
+        geometry = feature.get("geometry") or {}
+        if not isinstance(properties, dict) or not isinstance(geometry, dict):
+            continue
+        coordinates = geometry.get("coordinates") or []
+
+        try:
+            longitude, latitude = map(float, coordinates[:2])
+        except (TypeError, ValueError):
+            try:
+                latitude = float(properties["LATITUDE"])
+                longitude = float(properties["LONGITUDE"])
+            except (KeyError, TypeError, ValueError):
+                continue
+
+        fire_distance = distance_km(LAT, LON, latitude, longitude)
+        if fire_distance > radius_km:
+            continue
+
+        fire_number = properties.get("FIRE_NUMBER")
+        if not fire_number:
+            continue
+        fire_number = str(fire_number)
+        incident_params = {"incidentNumber": fire_number}
+        if properties.get("FIRE_YEAR"):
+            incident_params["fireYear"] = properties["FIRE_YEAR"]
+        incident_url = (
+            "https://wildfiresituation.nrs.gov.bc.ca/incidents?"
+            + urlencode(incident_params)
+        )
+
+        ignition_date = None
+        ignition_timestamp = properties.get("IGNITION_DATE")
+        if ignition_timestamp:
+            try:
+                ignition_date = convert_to_pst(float(ignition_timestamp) / 1000)
+            except (TypeError, ValueError, OSError):
+                pass
+
+        nearby_fires.append({
+            "fire_number": fire_number,
+            "incident_name": str(properties["INCIDENT_NAME"]).strip()
+            if properties.get("INCIDENT_NAME") else None,
+            "status": str(properties.get("FIRE_STATUS") or "Status unavailable"),
+            "cause": str(properties.get("FIRE_CAUSE") or "Cause undetermined"),
+            "location": str(properties["GEOGRAPHIC_DESCRIPTION"]).strip()
+            if properties.get("GEOGRAPHIC_DESCRIPTION") else None,
+            "size_ha": properties.get("CURRENT_SIZE"),
+            "ignition_date": ignition_date,
+            "distance_km": fire_distance,
+            "url": incident_url,
+        })
+
+    return sorted(nearby_fires, key=lambda fire: fire["distance_km"])
+
+
+def format_fire_size(size_ha):
+    """Format a wildfire size without implying more precision than supplied."""
+    if size_ha is None:
+        return "Size unavailable"
+    try:
+        size_ha = float(size_ha)
+    except (TypeError, ValueError):
+        return "Size unavailable"
+    if size_ha >= 10:
+        return f"{size_ha:,.0f} ha"
+    if size_ha >= 1:
+        return f"{size_ha:,.1f} ha"
+    return f"{size_ha:,.3f}".rstrip("0").rstrip(".") + " ha"
+
+
+def build_wildfire_section(nearby_fires=None, error_message=None):
+    """Build the daily email's nearby-wildfire section."""
+    map_url = html.escape(WILDFIRE_MAP_URL, quote=True)
+    section = f"""
+        <!-- NEARBY WILDFIRES -->
+        <div class="section wildfire-section">
+            <h2>Wildfires Within {WILDFIRE_RADIUS_KM} km</h2>
+    """
+
+    if error_message:
+        section += """
+            <div class="wildfire-empty wildfire-unavailable">
+                Wildfire data was unavailable when this report was generated.
+                Use the map below for the latest conditions.
+            </div>
+        """
+    elif not nearby_fires:
+        section += f"""
+            <div class="wildfire-empty">
+                No active wildfires are currently reported within
+                {WILDFIRE_RADIUS_KM} km of Birchdale.
+            </div>
+        """
+    else:
+        fire_word = "wildfire" if len(nearby_fires) == 1 else "wildfires"
+        section += f"""
+            <p class="wildfire-summary">
+                <strong>{len(nearby_fires)} active {fire_word}</strong> reported within
+                {WILDFIRE_RADIUS_KM} km of Birchdale, nearest first.
+            </p>
+        """
+
+        for fire in nearby_fires:
+            fire_number = html.escape(fire["fire_number"])
+            incident_name = fire.get("incident_name")
+            location = fire.get("location")
+            display_name = incident_name
+            if not display_name or display_name.strip().lower() == fire["fire_number"].lower():
+                display_name = location
+            title = fire_number
+            if display_name:
+                title += " &mdash; " + html.escape(display_name.strip())
+
+            status = html.escape(fire["status"])
+            cause = html.escape(fire["cause"])
+            size = html.escape(format_fire_size(fire.get("size_ha")))
+            incident_url = html.escape(fire["url"], quote=True)
+            status_class = {
+                "Out of Control": "out-of-control",
+                "Being Held": "being-held",
+                "Under Control": "under-control",
+                "Fire of Note": "fire-of-note",
+            }.get(fire["status"], "")
+            detail_parts = [
+                f'<strong>{fire["distance_km"]:.1f} km away</strong>',
+                cause,
+                size,
+            ]
+            if fire.get("ignition_date"):
+                detail_parts.append(
+                    "Discovered "
+                    + fire["ignition_date"].strftime("%b %d").replace(" 0", " ")
+                )
+
+            location_html = ""
+            if location and (not display_name or location.strip() != display_name.strip()):
+                location_html = (
+                    '<div class="wildfire-location">Approximate location: '
+                    + html.escape(location.strip())
+                    + "</div>"
+                )
+
+            section += f"""
+            <div class="wildfire-card">
+                <div class="wildfire-title-row">
+                    <a class="wildfire-title" href="{incident_url}">{title}</a>
+                    <span class="wildfire-status {status_class}">{status}</span>
+                </div>
+                <div class="wildfire-details">{' &bull; '.join(detail_parts)}</div>
+                {location_html}
+                <a class="wildfire-link" href="{incident_url}">Open fire details &rarr;</a>
+            </div>
+            """
+
+    section += f"""
+            <div class="wildfire-map-link">
+                <a href="{map_url}" class="live-button wildfire-map-button">
+                    Open Wildfire Map Around Birchdale
+                </a>
+            </div>
+            <p class="source">
+                Source: BC Wildfire Service. Distances are straight-line estimates from Birchdale.
+                Wildfire conditions can change quickly.
+            </p>
+        </div>
+    """
+    return section
 
 
 def create_24hour_chart(hourly_data):
@@ -268,6 +504,19 @@ def main():
     print("Generating 24-hour chart...")
     chart_buffer = create_24hour_chart(data['hourly'])
 
+    # Nearby wildfires should not prevent the weather report from being sent.
+    print(f"Fetching active wildfires within {WILDFIRE_RADIUS_KM} km...")
+    wildfire_error = None
+    try:
+        nearby_wildfires = fetch_nearby_wildfires()
+        print(f"Found {len(nearby_wildfires)} active wildfire(s) nearby.")
+    except (requests.RequestException, ValueError) as error:
+        nearby_wildfires = []
+        wildfire_error = str(error)
+        print(f"Wildfire fetch failed: {error}")
+
+    wildfire_section = build_wildfire_section(nearby_wildfires, wildfire_error)
+
     # ========================================
     # BUILD HTML EMAIL
     # ========================================
@@ -289,6 +538,24 @@ def main():
         .section h2 {{color: #f59e0b; font-size: 16px; margin: 0 0 15px; font-weight: 600; border-bottom: 1px solid #334155; padding-bottom: 8px; letter-spacing: -0.3px;}}
 
         .live-button {{display: inline-block; background: #f59e0b; color: #0f172a; padding: 10px 22px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; margin: 12px 5px;}}
+
+        .wildfire-section {{background: rgba(127,29,29,0.12);}}
+        .wildfire-summary {{color: #cbd5e1; margin: 0 0 14px; font-size: 13px;}}
+        .wildfire-card {{background: #0f172a; border: 1px solid #475569; border-left: 4px solid #ef4444; border-radius: 8px; padding: 14px; margin: 10px 0;}}
+        .wildfire-title-row {{margin-bottom: 7px;}}
+        .wildfire-title {{color: #f8fafc; font-size: 15px; font-weight: 700; text-decoration: none; margin-right: 8px;}}
+        .wildfire-status {{display: inline-block; border-radius: 999px; padding: 2px 8px; font-size: 10px; font-weight: 700; color: #0f172a; background: #cbd5e1; white-space: nowrap;}}
+        .wildfire-status.out-of-control {{background: #f87171;}}
+        .wildfire-status.being-held {{background: #fde047;}}
+        .wildfire-status.under-control {{background: #86efac;}}
+        .wildfire-status.fire-of-note {{background: #fb923c;}}
+        .wildfire-details {{color: #cbd5e1; font-size: 12px; margin-bottom: 5px;}}
+        .wildfire-location {{color: #94a3b8; font-size: 12px; margin-bottom: 7px;}}
+        .wildfire-link {{color: #f59e0b; font-size: 12px; font-weight: 600; text-decoration: none;}}
+        .wildfire-empty {{background: #0f172a; border: 1px solid #334155; border-left: 4px solid #22c55e; border-radius: 8px; padding: 14px; color: #cbd5e1; font-size: 13px;}}
+        .wildfire-unavailable {{border-left-color: #f59e0b;}}
+        .wildfire-map-link {{text-align: center; margin-top: 10px;}}
+        .wildfire-map-button {{background: #ef4444; color: #fff;}}
 
         .current-grid, .forecast-grid {{display: flex; flex-wrap: wrap; gap: 10px;}}
         .metric {{flex: 1; min-width: 110px; background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; text-align: center;}}
@@ -338,6 +605,8 @@ def main():
             <p class="source">It's only a forecast, always rely on your own senses! Built by Roy - Powered by OpenWeather API</p>
             <div class="quote-box">{quote}</div>
         </div>
+
+        {wildfire_section}
 
         <!-- CURRENT CONDITIONS -->
         <div class="section">
