@@ -1,0 +1,381 @@
+{
+  "source": "FireSmoke.ca (BlueSky/HYSPLIT surface PM2.5)",
+  "url": "https://firesmoke.ca/forecasts/current/dispersion.nc",
+  "lat": 50.038417,
+  "lon": -116.892033,
+  "cell": {
+    "row": 180,
+    "col": 431,
+    "center_lat": 50.05,
+    "center_lon": -116.85,
+    "resolution_deg": 0.1
+  },
+  "run_start_utc": "2026-07-19T15:00:00Z",
+  "hours": 51,
+  "peak": {
+    "time_utc": "2026-07-21T17:00:00Z",
+    "time_local": "2026-07-21 10:00 PDT",
+    "pm25": 9.94,
+    "aqi": 52,
+    "category": "Moderate"
+  },
+  "series": [
+    {
+      "time_utc": "2026-07-19T15:00:00Z",
+      "time_local": "2026-07-19 08:00 PDT",
+      "pm25": 0.66,
+      "aqi": 3,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-19T16:00:00Z",
+      "time_local": "2026-07-19 09:00 PDT",
+      "pm25": 0.68,
+      "aqi": 3,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-19T17:00:00Z",
+      "time_local": "2026-07-19 10:00 PDT",
+      "pm25": 0.71,
+      "aqi": 4,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-19T18:00:00Z",
+      "time_local": "2026-07-19 11:00 PDT",
+      "pm25": 1.08,
+      "aqi": 6,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-19T19:00:00Z",
+      "time_local": "2026-07-19 12:00 PDT",
+      "pm25": 2.53,
+      "aqi": 14,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-19T20:00:00Z",
+      "time_local": "2026-07-19 13:00 PDT",
+      "pm25": 3.79,
+      "aqi": 21,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-19T21:00:00Z",
+      "time_local": "2026-07-19 14:00 PDT",
+      "pm25": 4.91,
+      "aqi": 27,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-19T22:00:00Z",
+      "time_local": "2026-07-19 15:00 PDT",
+      "pm25": 6.17,
+      "aqi": 34,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-19T23:00:00Z",
+      "time_local": "2026-07-19 16:00 PDT",
+      "pm25": 7.22,
+      "aqi": 40,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-20T00:00:00Z",
+      "time_local": "2026-07-19 17:00 PDT",
+      "pm25": 7.53,
+      "aqi": 42,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-20T01:00:00Z",
+      "time_local": "2026-07-19 18:00 PDT",
+      "pm25": 5.66,
+      "aqi": 31,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-20T02:00:00Z",
+      "time_local": "2026-07-19 19:00 PDT",
+      "pm25": 4.67,
+      "aqi": 26,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-20T03:00:00Z",
+      "time_local": "2026-07-19 20:00 PDT",
+      "pm25": 2.73,
+      "aqi": 15,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-20T04:00:00Z",
+      "time_local": "2026-07-19 21:00 PDT",
+      "pm25": 2.86,
+      "aqi": 16,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-20T05:00:00Z",
+      "time_local": "2026-07-19 22:00 PDT",
+      "pm25": 4.44,
+      "aqi": 24,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-20T06:00:00Z",
+      "time_local": "2026-07-19 23:00 PDT",
+      "pm25": 8.37,
+      "aqi": 46,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-20T07:00:00Z",
+      "time_local": "2026-07-20 00:00 PDT",
+      "pm25": 7.11,
+      "aqi": 39,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-20T08:00:00Z",
+      "time_local": "2026-07-20 01:00 PDT",
+      "pm25": 9.24,
+      "aqi": 51,
+      "category": "Moderate"
+    },
+    {
+      "time_utc": "2026-07-20T09:00:00Z",
+      "time_local": "2026-07-20 02:00 PDT",
+      "pm25": 3.96,
+      "aqi": 22,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-20T10:00:00Z",
+      "time_local": "2026-07-20 03:00 PDT",
+      "pm25": 4.11,
+      "aqi": 23,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-20T11:00:00Z",
+      "time_local": "2026-07-20 04:00 PDT",
+      "pm25": 4.98,
+      "aqi": 27,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-20T12:00:00Z",
+      "time_local": "2026-07-20 05:00 PDT",
+      "pm25": 8.07,
+      "aqi": 44,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-20T13:00:00Z",
+      "time_local": "2026-07-20 06:00 PDT",
+      "pm25": 6.61,
+      "aqi": 37,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-20T14:00:00Z",
+      "time_local": "2026-07-20 07:00 PDT",
+      "pm25": 6.94,
+      "aqi": 38,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-20T15:00:00Z",
+      "time_local": "2026-07-20 08:00 PDT",
+      "pm25": 1.8,
+      "aqi": 10,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-20T16:00:00Z",
+      "time_local": "2026-07-20 09:00 PDT",
+      "pm25": 3.99,
+      "aqi": 22,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-20T17:00:00Z",
+      "time_local": "2026-07-20 10:00 PDT",
+      "pm25": 6.08,
+      "aqi": 33,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-20T18:00:00Z",
+      "time_local": "2026-07-20 11:00 PDT",
+      "pm25": 5.55,
+      "aqi": 31,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-20T19:00:00Z",
+      "time_local": "2026-07-20 12:00 PDT",
+      "pm25": 4.47,
+      "aqi": 24,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-20T20:00:00Z",
+      "time_local": "2026-07-20 13:00 PDT",
+      "pm25": 3.35,
+      "aqi": 18,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-20T21:00:00Z",
+      "time_local": "2026-07-20 14:00 PDT",
+      "pm25": 2.68,
+      "aqi": 14,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-20T22:00:00Z",
+      "time_local": "2026-07-20 15:00 PDT",
+      "pm25": 2.24,
+      "aqi": 12,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-20T23:00:00Z",
+      "time_local": "2026-07-20 16:00 PDT",
+      "pm25": 2.37,
+      "aqi": 13,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-21T00:00:00Z",
+      "time_local": "2026-07-20 17:00 PDT",
+      "pm25": 2.39,
+      "aqi": 13,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-21T01:00:00Z",
+      "time_local": "2026-07-20 18:00 PDT",
+      "pm25": 1.94,
+      "aqi": 11,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-21T02:00:00Z",
+      "time_local": "2026-07-20 19:00 PDT",
+      "pm25": 1.71,
+      "aqi": 9,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-21T03:00:00Z",
+      "time_local": "2026-07-20 20:00 PDT",
+      "pm25": 1.27,
+      "aqi": 7,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-21T04:00:00Z",
+      "time_local": "2026-07-20 21:00 PDT",
+      "pm25": 0.94,
+      "aqi": 5,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-21T05:00:00Z",
+      "time_local": "2026-07-20 22:00 PDT",
+      "pm25": 0.99,
+      "aqi": 5,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-21T06:00:00Z",
+      "time_local": "2026-07-20 23:00 PDT",
+      "pm25": 1.4,
+      "aqi": 8,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-21T07:00:00Z",
+      "time_local": "2026-07-21 00:00 PDT",
+      "pm25": 1.72,
+      "aqi": 9,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-21T08:00:00Z",
+      "time_local": "2026-07-21 01:00 PDT",
+      "pm25": 1.25,
+      "aqi": 7,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-21T09:00:00Z",
+      "time_local": "2026-07-21 02:00 PDT",
+      "pm25": 1.04,
+      "aqi": 6,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-21T10:00:00Z",
+      "time_local": "2026-07-21 03:00 PDT",
+      "pm25": 2.85,
+      "aqi": 16,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-21T11:00:00Z",
+      "time_local": "2026-07-21 04:00 PDT",
+      "pm25": 5.34,
+      "aqi": 29,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-21T12:00:00Z",
+      "time_local": "2026-07-21 05:00 PDT",
+      "pm25": 6.81,
+      "aqi": 38,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-21T13:00:00Z",
+      "time_local": "2026-07-21 06:00 PDT",
+      "pm25": 7.02,
+      "aqi": 39,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-21T14:00:00Z",
+      "time_local": "2026-07-21 07:00 PDT",
+      "pm25": 3.32,
+      "aqi": 18,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-21T15:00:00Z",
+      "time_local": "2026-07-21 08:00 PDT",
+      "pm25": 2.5,
+      "aqi": 14,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-21T16:00:00Z",
+      "time_local": "2026-07-21 09:00 PDT",
+      "pm25": 6.11,
+      "aqi": 34,
+      "category": "Good"
+    },
+    {
+      "time_utc": "2026-07-21T17:00:00Z",
+      "time_local": "2026-07-21 10:00 PDT",
+      "pm25": 9.94,
+      "aqi": 52,
+      "category": "Moderate"
+    }
+  ]
+}

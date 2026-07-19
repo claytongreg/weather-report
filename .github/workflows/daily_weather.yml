@@ -32,6 +32,10 @@ jobs:
           mkdir -p public
           PYTHONPATH=scripts python scripts/lake_report.py
 
+      - name: Run smoke forecast
+        run: |
+          PYTHONPATH=scripts python scripts/firesmoke.py --json public/firesmoke_data.json || echo "FireSmoke fetch failed; keeping previous data"
+
       - name: Commit changes
         run: |
           git config --global user.name "Bot"

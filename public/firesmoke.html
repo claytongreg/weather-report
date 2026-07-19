@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wildfire Smoke Forecast - Birchdale</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --border: #334155;
+      --text: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent: #f59e0b;
+      --shadow-lg: 0 20px 60px rgba(0,0,0,0.5);
+      --grid: #334155;
+    }
+    [data-theme="light"] {
+      --bg: #f1f5f9;
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #94a3b8;
+      --accent: #d97706;
+      --shadow-lg: 0 20px 60px rgba(0,0,0,0.1);
+      --grid: #e2e8f0;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', -apple-system, system-ui, sans-serif;
+      background: var(--bg);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 20px;
+      transition: background 0.3s;
+    }
+    .container {
+      max-width: 1000px;
+      width: 100%;
+      background: var(--surface);
+      border-radius: 16px;
+      box-shadow: var(--shadow-lg);
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .header {
+      background: linear-gradient(rgba(15, 23, 42, 0.45), rgba(15, 23, 42, 0.6)), url('header-bg.jpg') center/cover no-repeat;
+      color: #f1f5f9;
+      padding: 40px 30px;
+      text-align: center;
+      position: relative;
+      border-bottom: 1px solid var(--border);
+    }
+    .header h1 { font-size: 28px; margin-bottom: 8px; font-weight: 700; letter-spacing: -0.5px; text-shadow: 0 2px 8px rgba(0,0,0,0.5); }
+    .header p { opacity: 0.85; font-size: 13px; }
+    .theme-toggle {
+      position: absolute; top: 20px; right: 20px;
+      background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+      color: #f1f5f9; width: 40px; height: 40px; border-radius: 10px;
+      cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center;
+    }
+    .theme-toggle:hover { background: rgba(255,255,255,0.2); }
+    .back-link {
+      display: inline-block; margin-top: 15px; padding: 10px 20px;
+      background: rgba(245, 158, 11, 0.2); border: 1px solid rgba(245, 158, 11, 0.3);
+      border-radius: 8px; color: #f59e0b; text-decoration: none; font-weight: 500; font-size: 14px;
+    }
+    .back-link:hover { background: rgba(245, 158, 11, 0.3); }
+
+    .content { padding: 30px; }
+    .data-cards {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 14px; margin-bottom: 26px;
+    }
+    .data-card {
+      background: var(--bg); border: 1px solid var(--border);
+      padding: 20px; border-radius: 12px; text-align: center;
+    }
+    .data-card-label {
+      font-size: 11px; color: var(--accent); text-transform: uppercase;
+      letter-spacing: 1.5px; margin-bottom: 10px; font-weight: 600;
+    }
+    .data-card-value { font-size: 34px; font-weight: 700; color: var(--text); margin: 6px 0; line-height: 1.1; }
+    .data-card-unit { font-size: 13px; color: var(--text-muted); }
+    .data-card-subtext { font-size: 11px; color: var(--text-secondary); margin-top: 6px; }
+    .cat-pill {
+      display: inline-block; margin-top: 8px; padding: 3px 12px; border-radius: 999px;
+      font-size: 12px; font-weight: 700; color: #0f172a;
+    }
+    .status-msg { grid-column: 1 / -1; text-align: center; color: var(--text-muted); font-size: 14px; padding: 20px; }
+
+    .chart-section {
+      background: var(--bg); padding: 24px; border-radius: 12px;
+      border: 1px solid var(--border); margin-bottom: 20px;
+    }
+    .chart-section h2 {
+      color: var(--accent); font-size: 18px; margin-bottom: 4px; text-align: center; font-weight: 600;
+    }
+    .chart-sub { text-align: center; color: var(--text-muted); font-size: 12px; margin-bottom: 18px; }
+    svg { width: 100%; height: auto; display: block; overflow: visible; }
+    .legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; margin-top: 18px; }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+    .legend-swatch { width: 12px; height: 12px; border-radius: 3px; }
+
+    .update-info { text-align: center; padding: 16px; color: var(--text-muted); font-size: 12px; border-top: 1px solid var(--border); }
+    .update-info p { margin: 4px 0; }
+    .update-info strong { color: var(--text-secondary); }
+    .update-info a { color: var(--accent); }
+
+    @media (max-width: 768px) {
+      .data-cards { grid-template-columns: 1fr; }
+      .content { padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme" id="themeBtn"></button>
+      <h1>Wildfire Smoke Forecast</h1>
+      <p>Surface PM2.5 near Birchdale &middot; next ~48 hours</p>
+      <a href="index.html" class="back-link">Back to Weather</a>
+    </div>
+
+    <div class="content">
+      <div class="data-cards" id="cards">
+        <div class="status-msg">Loading smoke forecast&hellip;</div>
+      </div>
+
+      <div class="chart-section">
+        <h2>Hourly PM2.5 Forecast</h2>
+        <div class="chart-sub" id="chartSub">&mdash;</div>
+        <div id="chart"></div>
+        <div class="legend" id="legend"></div>
+      </div>
+
+      <div class="update-info">
+        <p><strong>Data Source:</strong> <a href="https://firesmoke.ca/forecasts/current/" target="_blank" rel="noopener">FireSmoke.ca</a> (UBC / BlueSky-HYSPLIT model)</p>
+        <p><strong>Forecast run:</strong> <span id="runTime">&mdash;</span></p>
+        <p>Updated when a new model run is published (a few times daily)</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- Theme ---
+    function isDark() { return document.documentElement.getAttribute('data-theme') !== 'light'; }
+    function setTheme(dark) {
+      document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+      document.getElementById('themeBtn').textContent = dark ? '☀️' : '🌙';
+      localStorage.setItem('theme', dark ? 'dark' : 'light');
+      if (window.__fc) draw(window.__fc); // redraw chart with theme colors
+    }
+    (function() {
+      var saved = localStorage.getItem('theme');
+      if (saved) setTheme(saved === 'dark');
+      else setTheme(window.matchMedia('(prefers-color-scheme: dark)').matches);
+    })();
+    function toggleTheme() { setTheme(!isDark()); }
+
+    // --- AQI category colors (US EPA scale) ---
+    var CATS = [
+      { name: 'Good', color: '#22c55e' },
+      { name: 'Moderate', color: '#eab308' },
+      { name: 'Unhealthy for Sensitive Groups', color: '#f97316' },
+      { name: 'Unhealthy', color: '#ef4444' },
+      { name: 'Very Unhealthy', color: '#a855f7' },
+      { name: 'Hazardous', color: '#8b1a1a' }
+    ];
+    function catColor(name) {
+      for (var i = 0; i < CATS.length; i++) if (CATS[i].name === name) return CATS[i].color;
+      return '#64748b';
+    }
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+        return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+      });
+    }
+
+    function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+
+    // --- Cards ---
+    function render(fc) {
+      window.__fc = fc;
+      var first = fc.series[0], peak = fc.peak;
+      var cards = [];
+      cards.push(card('Current', first.pm25.toFixed(1), 'µg/m³ PM2.5',
+        first.time_local, 'AQI ' + first.aqi + ' · ' + first.category, catColor(first.category)));
+      cards.push(card('Peak (next 48h)', peak.pm25.toFixed(1), 'µg/m³ PM2.5',
+        peak.time_local, 'AQI ' + peak.aqi + ' · ' + peak.category, catColor(peak.category)));
+      var avg = fc.series.reduce(function(a, p){ return a + p.pm25; }, 0) / fc.series.length;
+      cards.push(card('Average', avg.toFixed(1), 'µg/m³ PM2.5', fc.hours + ' hour forecast', null, null));
+      cards.push(card('Grid Point', fc.cell.center_lat.toFixed(2) + ', ' + fc.cell.center_lon.toFixed(2), '',
+        fc.cell.resolution_deg + '° model cell', null, null));
+      document.getElementById('cards').innerHTML = cards.join('');
+
+      document.getElementById('runTime').textContent = fmtRun(fc.run_start_utc);
+      document.getElementById('chartSub').textContent =
+        'Model run starting ' + fmtRun(fc.run_start_utc) + ' · times shown in Pacific';
+      buildLegend(fc);
+      draw(fc);
+    }
+    function card(label, value, unit, sub, pill, pillColor) {
+      var pillHtml = pill ? '<div class="cat-pill" style="background:' + pillColor + '">' + esc(pill) + '</div>' : '';
+      return '<div class="data-card">' +
+        '<div class="data-card-label">' + esc(label) + '</div>' +
+        '<div class="data-card-value">' + esc(value) + '</div>' +
+        '<div class="data-card-unit">' + esc(unit) + '</div>' +
+        (sub ? '<div class="data-card-subtext">' + esc(sub) + '</div>' : '') +
+        pillHtml + '</div>';
+    }
+    function fmtRun(iso) {
+      try { return new Date(iso).toLocaleString(undefined, { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }); }
+      catch (e) { return iso; }
+    }
+    function buildLegend(fc) {
+      var used = {};
+      fc.series.forEach(function(p){ used[p.category] = true; });
+      var html = CATS.filter(function(c){ return used[c.name]; }).map(function(c){
+        return '<div class="legend-item"><span class="legend-swatch" style="background:' + c.color + '"></span>' + esc(c.name) + '</div>';
+      }).join('');
+      document.getElementById('legend').innerHTML = html;
+    }
+
+    // --- SVG line/area chart ---
+    function draw(fc) {
+      var s = fc.series;
+      var W = 920, H = 380, ml = 48, mr = 16, mt = 16, mb = 54;
+      var iw = W - ml - mr, ih = H - mt - mb;
+      var maxV = Math.max(10, Math.ceil(Math.max.apply(null, s.map(function(p){ return p.pm25; })) / 5) * 5);
+      var n = s.length;
+      var x = function(i) { return ml + (n === 1 ? iw/2 : iw * i / (n - 1)); };
+      var y = function(v) { return mt + ih * (1 - v / maxV); };
+
+      var grid = cssVar('--grid'), txt = cssVar('--text-muted'), accent = cssVar('--accent');
+      var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="PM2.5 forecast chart">';
+
+      // y gridlines + labels
+      var ticks = 5;
+      for (var t = 0; t <= ticks; t++) {
+        var v = maxV * t / ticks, yy = y(v);
+        svg += '<line x1="' + ml + '" y1="' + yy + '" x2="' + (W - mr) + '" y2="' + yy + '" stroke="' + grid + '" stroke-width="1"/>';
+        svg += '<text x="' + (ml - 8) + '" y="' + (yy + 4) + '" text-anchor="end" font-size="11" fill="' + txt + '">' + Math.round(v) + '</text>';
+      }
+      svg += '<text x="14" y="' + (mt + ih/2) + '" transform="rotate(-90 14 ' + (mt + ih/2) + ')" text-anchor="middle" font-size="11" fill="' + txt + '">µg/m³</text>';
+
+      // x labels: mark local midnight / noon
+      for (var i = 0; i < n; i++) {
+        var lbl = s[i].time_local; // "YYYY-MM-DD HH:MM TZ"
+        var hh = lbl.split(' ')[1];
+        if (hh === '00:00' || hh === '12:00') {
+          var d = new Date(s[i].time_utc);
+          var tick = d.toLocaleString(undefined, { weekday:'short', hour:'numeric' });
+          svg += '<line x1="' + x(i) + '" y1="' + mt + '" x2="' + x(i) + '" y2="' + (mt + ih) + '" stroke="' + grid + '" stroke-width="1" stroke-dasharray="3 3"/>';
+          svg += '<text x="' + x(i) + '" y="' + (H - mb + 20) + '" text-anchor="middle" font-size="11" fill="' + txt + '">' + tick + '</text>';
+        }
+      }
+
+      // area + line
+      var line = '', area = 'M ' + x(0) + ' ' + y(s[0].pm25);
+      for (var i = 0; i < n; i++) {
+        line += (i ? ' L ' : 'M ') + x(i).toFixed(1) + ' ' + y(s[i].pm25).toFixed(1);
+        if (i) area += ' L ' + x(i).toFixed(1) + ' ' + y(s[i].pm25).toFixed(1);
+      }
+      area += ' L ' + x(n-1) + ' ' + y(0) + ' L ' + x(0) + ' ' + y(0) + ' Z';
+      svg += '<path d="' + area + '" fill="' + accent + '" opacity="0.12"/>';
+      svg += '<path d="' + line + '" fill="none" stroke="' + accent + '" stroke-width="2.5" stroke-linejoin="round"/>';
+
+      // points colored by AQI category
+      for (var i = 0; i < n; i++) {
+        var p = s[i];
+        svg += '<circle cx="' + x(i).toFixed(1) + '" cy="' + y(p.pm25).toFixed(1) + '" r="3" fill="' + catColor(p.category) + '">' +
+               '<title>' + esc(p.time_local) + ' — ' + p.pm25.toFixed(1) + ' µg/m³ (AQI ' + p.aqi + ', ' + esc(p.category) + ')</title></circle>';
+      }
+      svg += '</svg>';
+      document.getElementById('chart').innerHTML = svg;
+    }
+
+    // --- Live data load (GitHub raw with bundled fallback, mirrors lake.html) ---
+    var RAW_BASE = 'https://raw.githubusercontent.com/claytongreg/weather-report/main/public/';
+    async function load() {
+      var sources = [RAW_BASE + 'firesmoke_data.json?t=' + Date.now(), 'firesmoke_data.json'];
+      for (var i = 0; i < sources.length; i++) {
+        try {
+          var res = await fetch(sources[i], { cache: 'no-store' });
+          if (!res.ok) continue;
+          var fc = JSON.parse(await res.text());
+          if (fc && fc.series && fc.series.length) { render(fc); return; }
+        } catch (e) { /* try next */ }
+      }
+      document.getElementById('cards').innerHTML =
+        '<div class="status-msg">Could not load smoke forecast. Please try again shortly.</div>';
+    }
+    load();
+  </script>
+</body>
+</html>
