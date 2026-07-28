@@ -6,14 +6,12 @@ and sends via Gmail SMTP.
 """
 import html
 import io
-import math
 import os
 import smtplib
 from datetime import datetime, timezone
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from urllib.parse import urlencode
 
 import matplotlib
 matplotlib.use('Agg')
@@ -22,25 +20,22 @@ import numpy as np
 import requests
 
 from utils import LAT, LON, MS_TO_KMH, OPENWEATHER_URL, ICON_BASE, PACIFIC, convert_to_pst, get_cardinal
-from firesmoke import fetch_pm25_forecast
+from firesmoke import fetch_pm25_forecast, pm25_to_aqi
+from wildfires import (
+    WILDFIRE_MAP_URL,
+    fetch_nearby_wildfires,
+    fire_display_name,
+    format_fire_size,
+)
 
 # Configuration from environment variables
 OPENWEATHER_API_KEY = os.environ.get('OPENWEATHER_API_KEY')
+PURPLEAIR_API_KEY = os.environ.get('PURPLEAIR_API_KEY')
 EMAIL_FROM = os.environ.get('EMAIL_FROM')
 EMAIL_TO = os.environ.get('EMAIL_TO')
 EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD')
 
 WILDFIRE_RADIUS_KM = 50
-WILDFIRE_API_URL = (
-    "https://services6.arcgis.com/ubm4tcTYICKBpist/arcgis/rest/services/"
-    "BCWS_ActiveFires_PublicView/FeatureServer/0/query"
-)
-WILDFIRE_MAP_URL = "https://wildfiresituation.nrs.gov.bc.ca/map?" + urlencode({
-    "longitude": LON,
-    "latitude": LAT,
-    "activeWildfires": "true",
-    "zoom": 9,
-})
 
 
 # ========================================
@@ -55,127 +50,6 @@ def get_quote():
     except:
         pass
     return '"Every day is a new beginning." \u2014 Unknown'
-
-
-def distance_km(lat1, lon1, lat2, lon2):
-    """Return the great-circle distance between two coordinates."""
-    earth_radius_km = 6371.0088
-    lat1_rad = math.radians(lat1)
-    lat2_rad = math.radians(lat2)
-    delta_lat = math.radians(lat2 - lat1)
-    delta_lon = math.radians(lon2 - lon1)
-    haversine = (
-        math.sin(delta_lat / 2) ** 2
-        + math.cos(lat1_rad)
-        * math.cos(lat2_rad)
-        * math.sin(delta_lon / 2) ** 2
-    )
-    haversine = min(1, max(0, haversine))
-    return 2 * earth_radius_km * math.atan2(
-        math.sqrt(haversine), math.sqrt(1 - haversine)
-    )
-
-
-def fetch_nearby_wildfires(radius_km=WILDFIRE_RADIUS_KM):
-    """Fetch active BC wildfires within radius_km of Birchdale."""
-    params = {
-        "where": "FIRE_STATUS <> 'Out'",
-        "outFields": ",".join([
-            "FIRE_YEAR",
-            "FIRE_NUMBER",
-            "INCIDENT_NAME",
-            "FIRE_STATUS",
-            "FIRE_CAUSE",
-            "GEOGRAPHIC_DESCRIPTION",
-            "CURRENT_SIZE",
-            "IGNITION_DATE",
-            "LATITUDE",
-            "LONGITUDE",
-        ]),
-        "returnGeometry": "true",
-        "outSR": "4326",
-        "f": "geojson",
-    }
-    response = requests.get(WILDFIRE_API_URL, params=params, timeout=15)
-    response.raise_for_status()
-
-    payload = response.json()
-    if not isinstance(payload, dict) or payload.get("type") != "FeatureCollection":
-        raise ValueError("BC Wildfire API returned an unexpected response")
-
-    nearby_fires = []
-    for feature in payload.get("features", []):
-        if not isinstance(feature, dict):
-            continue
-        properties = feature.get("properties") or {}
-        geometry = feature.get("geometry") or {}
-        if not isinstance(properties, dict) or not isinstance(geometry, dict):
-            continue
-        coordinates = geometry.get("coordinates") or []
-
-        try:
-            longitude, latitude = map(float, coordinates[:2])
-        except (TypeError, ValueError):
-            try:
-                latitude = float(properties["LATITUDE"])
-                longitude = float(properties["LONGITUDE"])
-            except (KeyError, TypeError, ValueError):
-                continue
-
-        fire_distance = distance_km(LAT, LON, latitude, longitude)
-        if fire_distance > radius_km:
-            continue
-
-        fire_number = properties.get("FIRE_NUMBER")
-        if not fire_number:
-            continue
-        fire_number = str(fire_number)
-        incident_params = {"incidentNumber": fire_number}
-        if properties.get("FIRE_YEAR"):
-            incident_params["fireYear"] = properties["FIRE_YEAR"]
-        incident_url = (
-            "https://wildfiresituation.nrs.gov.bc.ca/incidents?"
-            + urlencode(incident_params)
-        )
-
-        ignition_date = None
-        ignition_timestamp = properties.get("IGNITION_DATE")
-        if ignition_timestamp:
-            try:
-                ignition_date = convert_to_pst(float(ignition_timestamp) / 1000)
-            except (TypeError, ValueError, OSError):
-                pass
-
-        nearby_fires.append({
-            "fire_number": fire_number,
-            "incident_name": str(properties["INCIDENT_NAME"]).strip()
-            if properties.get("INCIDENT_NAME") else None,
-            "status": str(properties.get("FIRE_STATUS") or "Status unavailable"),
-            "cause": str(properties.get("FIRE_CAUSE") or "Cause undetermined"),
-            "location": str(properties["GEOGRAPHIC_DESCRIPTION"]).strip()
-            if properties.get("GEOGRAPHIC_DESCRIPTION") else None,
-            "size_ha": properties.get("CURRENT_SIZE"),
-            "ignition_date": ignition_date,
-            "distance_km": fire_distance,
-            "url": incident_url,
-        })
-
-    return sorted(nearby_fires, key=lambda fire: fire["distance_km"])
-
-
-def format_fire_size(size_ha):
-    """Format a wildfire size without implying more precision than supplied."""
-    if size_ha is None:
-        return "Size unavailable"
-    try:
-        size_ha = float(size_ha)
-    except (TypeError, ValueError):
-        return "Size unavailable"
-    if size_ha >= 10:
-        return f"{size_ha:,.0f} ha"
-    if size_ha >= 1:
-        return f"{size_ha:,.1f} ha"
-    return f"{size_ha:,.3f}".rstrip("0").rstrip(".") + " ha"
 
 
 def build_wildfire_section(nearby_fires=None, error_message=None):
@@ -212,14 +86,11 @@ def build_wildfire_section(nearby_fires=None, error_message=None):
 
         for fire in nearby_fires:
             fire_number = html.escape(fire["fire_number"])
-            incident_name = fire.get("incident_name")
             location = fire.get("location")
-            display_name = incident_name
-            if not display_name or display_name.strip().lower() == fire["fire_number"].lower():
-                display_name = location
+            display_name = fire_display_name(fire)
             title = fire_number
             if display_name:
-                title += " &mdash; " + html.escape(display_name.strip())
+                title += " &mdash; " + html.escape(display_name)
 
             status = html.escape(fire["status"])
             cause = html.escape(fire["cause"])
@@ -353,6 +224,60 @@ def build_smoke_section(forecast=None, error_message=None):
                 <a href="{SMOKE_PAGE_URL}" class="live-button wildfire-map-button">Open Live Smoke Forecast &rarr;</a>
             </div>
             <p class="source">Source: FireSmoke.ca (BlueSky/HYSPLIT). AQI uses the US EPA PM2.5 scale.</p>
+        </div>"""
+
+
+# Nearest live PurpleAir sensor to Birchdale (~22 km south, on Kootenay Lake).
+PURPLEAIR_SENSOR_INDEX = 179815
+PURPLEAIR_SENSOR_NAME = "Fletcher Creek"
+PURPLEAIR_MAP_URL = f"https://map.purpleair.com/?select={PURPLEAIR_SENSOR_INDEX}"
+
+
+def fetch_purpleair_aqi():
+    """Fetch the nearest PurpleAir sensor's live PM2.5 and return corrected AQI."""
+    if not PURPLEAIR_API_KEY:
+        raise RuntimeError("PURPLEAIR_API_KEY is not set")
+
+    url = f"https://api.purpleair.com/v1/sensors/{PURPLEAIR_SENSOR_INDEX}"
+    resp = requests.get(
+        url,
+        params={"fields": "pm2.5,humidity"},
+        headers={"X-API-Key": PURPLEAIR_API_KEY},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    sensor = resp.json().get("sensor") or {}
+
+    raw_pm25 = sensor.get("pm2.5")
+    if raw_pm25 is None:
+        raise ValueError("PurpleAir response missing pm2.5")
+    humidity = sensor.get("humidity")
+
+    # US EPA correction for PurpleAir PM2.5 (Barkjohn 2021), same scale the map uses.
+    if humidity is not None:
+        pm25 = 0.524 * raw_pm25 - 0.0862 * humidity + 5.75
+    else:
+        pm25 = raw_pm25
+    pm25 = max(0.0, pm25)
+
+    aqi, category = pm25_to_aqi(pm25)
+    return {"pm25": pm25, "aqi": aqi, "category": category}
+
+
+def build_air_quality_section(aq=None, error_message=None):
+    """Small air-quality line from the nearest live PurpleAir sensor."""
+    if error_message or not aq or aq.get("aqi") is None:
+        return ""
+    return f"""
+        <!-- AIR QUALITY -->
+        <div class="section">
+            <h2>Air Quality &mdash; {PURPLEAIR_SENSOR_NAME}</h2>
+            <p class="wildfire-summary">
+                <strong>AQI {aq['aqi']}</strong> ({html.escape(aq['category'])})
+                &bull; PM2.5 {aq['pm25']:.1f} µg/m³
+                &bull; <a href="{PURPLEAIR_MAP_URL}" style="color:#f59e0b;text-decoration:none;font-weight:600;">PurpleAir &rarr;</a>
+            </p>
+            <p class="source">Nearest live sensor, ~22 km south. US EPA PM2.5 correction applied.</p>
         </div>"""
 
 
@@ -588,7 +513,7 @@ def main():
     print(f"Fetching active wildfires within {WILDFIRE_RADIUS_KM} km...")
     wildfire_error = None
     try:
-        nearby_wildfires = fetch_nearby_wildfires()
+        nearby_wildfires = fetch_nearby_wildfires(WILDFIRE_RADIUS_KM)
         print(f"Found {len(nearby_wildfires)} active wildfire(s) nearby.")
     except (requests.RequestException, ValueError) as error:
         nearby_wildfires = []
@@ -611,6 +536,17 @@ def main():
         print(f"Smoke forecast fetch failed: {error}")
 
     smoke_section = build_smoke_section(smoke_forecast, smoke_error)
+
+    # Nearest-sensor air quality (PurpleAir). Non-fatal for the report.
+    print("Fetching PurpleAir air quality...")
+    air_quality = None
+    try:
+        air_quality = fetch_purpleair_aqi()
+        print(f"Air quality: AQI {air_quality['aqi']} ({air_quality['category']})")
+    except Exception as error:  # noqa: BLE001 - never block the email on AQI data
+        print(f"Air quality fetch failed: {error}")
+
+    air_quality_section = build_air_quality_section(air_quality)
 
     # ========================================
     # BUILD HTML EMAIL
@@ -811,6 +747,8 @@ def main():
 """
 
     email_html += smoke_section
+
+    email_html += air_quality_section
 
     email_html += """
         <!-- FOOTER -->

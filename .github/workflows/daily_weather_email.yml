@@ -9,6 +9,7 @@ jobs:
 
     env:
       OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
+      PURPLEAIR_API_KEY: ${{ secrets.PURPLEAIR_API_KEY }}
       EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
       EMAIL_TO: ${{ secrets.EMAIL_TO }}
       EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}

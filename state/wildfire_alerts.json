@@ -1,0 +1,15 @@
+{
+  "fires": {
+    "2026-N71086": {
+      "alerted": false,
+      "distance_km": 14.6,
+      "first_seen": "2026-07-24T14:25:54.978835-07:00",
+      "name": "Davis Creek",
+      "seeded": true,
+      "status": "Being Held"
+    }
+  },
+  "radius_km": 15,
+  "updated": "2026-07-24T14:26:03.588605-07:00",
+  "version": 1
+}

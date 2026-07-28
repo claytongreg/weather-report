@@ -1,0 +1,72 @@
+name: Wildfire Monitor (SMS Alerts)
+on:
+  schedule:
+    # Every 2 hours, around the clock. A new fire 15 km away matters at 3am too.
+    # Offset to :30 so state pushes do not race the daily lake report bot.
+    - cron: '30 */2 * * *'
+  workflow_dispatch:
+    inputs:
+      test_sms:
+        description: 'Send a test SMS instead of checking for new fires'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+# Two overlapping runs would both diff against the same state and could double-send.
+concurrency:
+  group: wildfire-monitor
+  cancel-in-progress: false
+
+jobs:
+  check-wildfires:
+    runs-on: ubuntu-latest
+
+    env:
+      TELNYX_API_KEY: ${{ secrets.TELNYX_API_KEY }}
+      TELNYX_PHONE_NUMBER: ${{ secrets.TELNYX_PHONE_NUMBER }}
+      PHONE_NUMBERS: ${{ secrets.PHONE_NUMBERS }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Send test SMS
+        if: inputs.test_sms
+        run: PYTHONPATH=scripts python scripts/wildfire_sms_monitor.py --test-sms
+
+      - name: Check for new wildfires
+        if: ${{ !inputs.test_sms }}
+        run: PYTHONPATH=scripts python scripts/wildfire_sms_monitor.py
+
+      # The committed state file is what makes "new" mean anything - without it
+      # every run would re-text the same fire. Commit even if the check failed,
+      # so any fire already alerted is not announced twice.
+      - name: Commit alert state
+        if: ${{ always() && !inputs.test_sms }}
+        run: |
+          git config --global user.name "Bot"
+          git config --global user.email "bot@github.com"
+          git add state/
+          if git diff --cached --quiet; then
+            echo "No state change"
+            exit 0
+          fi
+          git commit -m "Update wildfire alert state $(date +'%Y-%m-%d %H:%M')"
+          for attempt in 1 2 3; do
+            if git pull --rebase --autostash && git push; then
+              echo "Pushed on attempt $attempt"
+              exit 0
+            fi
+            echo "Push attempt $attempt failed; retrying..."
+            sleep 5
+          done
+          echo "Could not push state after 3 attempts"
+          exit 1
