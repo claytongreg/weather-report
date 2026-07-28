@@ -135,6 +135,11 @@ def main():
             f"{SMS_RADIUS_KM}km will arrive on this number."
         )
         sent = send_sms(text)
+        if sent == 0:
+            # A "successful" test that delivered nothing is worse than useless:
+            # it is exactly how the wind monitor hid a dead Telnyx key for days.
+            print("\nERROR: test message reached nobody.")
+            return 1
         print(f"\nTest message delivered to {sent} recipient(s).")
         return 0
 
