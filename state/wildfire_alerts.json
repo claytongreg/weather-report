@@ -7,9 +7,17 @@
       "name": "Davis Creek",
       "seeded": true,
       "status": "Being Held"
+    },
+    "2026-N71288": {
+      "alerted": true,
+      "distance_km": 4.2,
+      "first_seen": "2026-07-28T09:07:02.321375-07:00",
+      "name": "Clute Creek",
+      "seeded": false,
+      "status": "Under Control"
     }
   },
   "radius_km": 15,
-  "updated": "2026-07-28T07:09:16.864024-07:00",
+  "updated": "2026-07-28T09:07:02.321375-07:00",
   "version": 1
 }
