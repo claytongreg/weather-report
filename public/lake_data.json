@@ -1,14 +1,14 @@
 {
-  "queens_ft": "1743.41",
+  "queens_ft": "1743.42",
   "queens_m": "531.39",
-  "queens_updated": "Aug 08 2026 06:40:02",
-  "nelson_ft": "1743.10",
+  "queens_updated": "Aug 09 2026 06:40:02",
+  "nelson_ft": "1743.12",
   "nelson_m": "531.30",
-  "nelson_updated": "Aug 08 2026 06:40:02",
-  "discharge_cfs": "20107",
+  "nelson_updated": "Aug 09 2026 06:40:02",
+  "discharge_cfs": "19012",
   "discharge_location": "Brilliant",
-  "discharge_date": "Aug 07 2026",
-  "update_time": "August 08, 2026 at 06:47 AM PST",
-  "generated_at": "2026-08-08T06:47:17.759060-07:00",
+  "discharge_date": "Aug 08 2026",
+  "update_time": "August 09, 2026 at 06:50 AM PST",
+  "generated_at": "2026-08-09T06:50:56.402434-07:00",
   "chart": "lake_chart.png"
 }
