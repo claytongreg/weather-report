@@ -1,5 +1,14 @@
 {
-  "update_time": "August 26, 2026 at 06:56 AM PST",
-  "generated_at": "2026-08-26T06:56:07.731312-07:00",
+  "queens_ft": "1743.48",
+  "queens_m": "531.41",
+  "queens_updated": "Aug 27 2026 15:40:03",
+  "nelson_ft": "1743.17",
+  "nelson_m": "531.32",
+  "nelson_updated": "Aug 27 2026 15:40:03",
+  "discharge_cfs": "18914",
+  "discharge_location": "Brilliant",
+  "discharge_date": "Aug 26 2026",
+  "update_time": "August 27, 2026 at 03:51 PM PST",
+  "generated_at": "2026-08-27T15:51:55.893924-07:00",
   "chart": "lake_chart.png"
 }
