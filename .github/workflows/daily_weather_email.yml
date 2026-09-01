@@ -1,7 +1,9 @@
-name: Daily Birchdale Weather Email (3am)
+name: Daily Birchdale Weather Email (early morning Pacific)
 on:
   schedule:
-    - cron: '0 10 * * *'
+    # 09:20 UTC = 2:20am PDT / 1:20am PST. GitHub's cron is best-effort and
+    # runs late under load, so aim early and avoid :00, the most congested minute.
+    - cron: '20 9 * * *'
   workflow_dispatch:
 jobs:
   send-daily-email:
