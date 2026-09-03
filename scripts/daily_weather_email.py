@@ -35,6 +35,13 @@ EMAIL_FROM = os.environ.get('EMAIL_FROM')
 EMAIL_TO = os.environ.get('EMAIL_TO')
 EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD')
 
+# Seasonal email switch. Set INCLUDE_FIRE_SMOKE_IN_EMAIL=true to restore the
+# wildfire, smoke forecast, and air-quality content without changing the site.
+INCLUDE_FIRE_SMOKE_IN_EMAIL = (
+    os.environ.get('INCLUDE_FIRE_SMOKE_IN_EMAIL', 'false').strip().lower()
+    in {'1', 'true', 'yes', 'on'}
+)
+
 WILDFIRE_RADIUS_KM = 50
 
 
@@ -509,44 +516,57 @@ def main():
     print("Generating 24-hour chart...")
     chart_buffer = create_24hour_chart(data['hourly'])
 
-    # Nearby wildfires should not prevent the weather report from being sent.
-    print(f"Fetching active wildfires within {WILDFIRE_RADIUS_KM} km...")
-    wildfire_error = None
-    try:
-        nearby_wildfires = fetch_nearby_wildfires(WILDFIRE_RADIUS_KM)
-        print(f"Found {len(nearby_wildfires)} active wildfire(s) nearby.")
-    except (requests.RequestException, ValueError) as error:
-        nearby_wildfires = []
-        wildfire_error = str(error)
-        print(f"Wildfire fetch failed: {error}")
-
-    wildfire_section = build_wildfire_section(nearby_wildfires, wildfire_error)
-
-    # Wildfire smoke forecast (FireSmoke.ca). Also non-fatal for the report.
-    print("Fetching wildfire smoke forecast...")
-    smoke_error = None
-    smoke_forecast = None
+    wildfire_section = ""
+    smoke_section = ""
+    air_quality_section = ""
+    fire_smoke_header_link = ""
     smoke_chart_buffer = None
-    try:
-        smoke_forecast = fetch_pm25_forecast()
-        smoke_chart_buffer = create_smoke_chart(smoke_forecast['series'])
-        print(f"Smoke forecast: {smoke_forecast['hours']}h, peak {smoke_forecast['peak']['pm25']} ug/m3")
-    except Exception as error:  # noqa: BLE001 - never block the email on smoke data
-        smoke_error = str(error)
-        print(f"Smoke forecast fetch failed: {error}")
 
-    smoke_section = build_smoke_section(smoke_forecast, smoke_error)
+    if INCLUDE_FIRE_SMOKE_IN_EMAIL:
+        fire_smoke_header_link = (
+            '<a href="https://birchdale-weather.netlify.app/firesmoke.html" '
+            'class="live-button">Wildfire Smoke</a>'
+        )
 
-    # Nearest-sensor air quality (PurpleAir). Non-fatal for the report.
-    print("Fetching PurpleAir air quality...")
-    air_quality = None
-    try:
-        air_quality = fetch_purpleair_aqi()
-        print(f"Air quality: AQI {air_quality['aqi']} ({air_quality['category']})")
-    except Exception as error:  # noqa: BLE001 - never block the email on AQI data
-        print(f"Air quality fetch failed: {error}")
+        # Nearby wildfires should not prevent the weather report from being sent.
+        print(f"Fetching active wildfires within {WILDFIRE_RADIUS_KM} km...")
+        wildfire_error = None
+        try:
+            nearby_wildfires = fetch_nearby_wildfires(WILDFIRE_RADIUS_KM)
+            print(f"Found {len(nearby_wildfires)} active wildfire(s) nearby.")
+        except (requests.RequestException, ValueError) as error:
+            nearby_wildfires = []
+            wildfire_error = str(error)
+            print(f"Wildfire fetch failed: {error}")
 
-    air_quality_section = build_air_quality_section(air_quality)
+        wildfire_section = build_wildfire_section(nearby_wildfires, wildfire_error)
+
+        # Wildfire smoke forecast (FireSmoke.ca). Also non-fatal for the report.
+        print("Fetching wildfire smoke forecast...")
+        smoke_error = None
+        smoke_forecast = None
+        try:
+            smoke_forecast = fetch_pm25_forecast()
+            smoke_chart_buffer = create_smoke_chart(smoke_forecast['series'])
+            print(f"Smoke forecast: {smoke_forecast['hours']}h, peak {smoke_forecast['peak']['pm25']} ug/m3")
+        except Exception as error:  # noqa: BLE001 - never block the email on smoke data
+            smoke_error = str(error)
+            print(f"Smoke forecast fetch failed: {error}")
+
+        smoke_section = build_smoke_section(smoke_forecast, smoke_error)
+
+        # Nearest-sensor air quality (PurpleAir). Non-fatal for the report.
+        print("Fetching PurpleAir air quality...")
+        air_quality = None
+        try:
+            air_quality = fetch_purpleair_aqi()
+            print(f"Air quality: AQI {air_quality['aqi']} ({air_quality['category']})")
+        except Exception as error:  # noqa: BLE001 - never block the email on AQI data
+            print(f"Air quality fetch failed: {error}")
+
+        air_quality_section = build_air_quality_section(air_quality)
+    else:
+        print("Wildfire, smoke, and air-quality email content is seasonally disabled.")
 
     # ========================================
     # BUILD HTML EMAIL
@@ -633,7 +653,7 @@ def main():
             <p>{current_time.strftime("%A, %B %d, %Y at %I:%M %p %Z")}</p>
             <a href="https://birchdale-weather.netlify.app/" class="live-button">Live Conditions</a>
             <a href="https://birchdale-weather.netlify.app/lake.html" class="live-button">Lake Level Data</a>
-            <a href="https://birchdale-weather.netlify.app/firesmoke.html" class="live-button">Wildfire Smoke</a>
+            {fire_smoke_header_link}
             <p class="source">It's only a forecast, always rely on your own senses! Built by Roy - Powered by OpenWeather API</p>
             <div class="quote-box">{quote}</div>
         </div>
