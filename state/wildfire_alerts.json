@@ -15,9 +15,17 @@
       "name": "Clute Creek",
       "seeded": false,
       "status": "Under Control"
+    },
+    "2026-N72245": {
+      "alerted": true,
+      "distance_km": 12.1,
+      "first_seen": "2026-09-18T17:32:07.775100-07:00",
+      "name": "Rossieter Creek",
+      "seeded": false,
+      "status": "Being Held"
     }
   },
   "radius_km": 15,
-  "updated": "2026-09-18T14:10:21.221825-07:00",
+  "updated": "2026-09-18T17:32:07.775100-07:00",
   "version": 1
 }
